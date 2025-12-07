@@ -422,29 +422,30 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
             except Exception as err:
                 _LOGGER.debug("aiohttp router method failed: %s", err)
         
-        # Method 3: Frontend component approach with automatic resource registration
+        # Method 3: HACS community folder approach (proper HACS convention)
         if not registered:
             try:
                 from homeassistant.components.frontend import add_extra_js_url
                 
-                # Copy the file to www directory and use local path
+                # Copy the file to HACS community directory structure
                 import shutil
-                local_www = hass.config.path("www")
-                if not os.path.exists(local_www):
-                    os.makedirs(local_www)
+                community_dir = hass.config.path("www/community/simple-chores")
+                if not os.path.exists(community_dir):
+                    os.makedirs(community_dir)
                 
-                target_file = os.path.join(local_www, "simple-chores-card.js")
+                target_file = os.path.join(community_dir, "simple-chores-card.js")
                 shutil.copy2(card_file, target_file)
                 
-                add_extra_js_url(hass, "/local/simple-chores-card.js")
+                card_url = "/local/community/simple-chores/simple-chores-card.js"
+                add_extra_js_url(hass, card_url)
                 
                 # Also try to auto-register with Lovelace
-                await _async_auto_register_lovelace_resource(hass, "/local/simple-chores-card.js")
+                await _async_auto_register_lovelace_resource(hass, card_url)
                 
                 registered = True
-                _LOGGER.info("Card copied to www and registered via add_extra_js_url")
+                _LOGGER.info("Card copied to HACS community folder and registered: %s", card_url)
             except Exception as err:
-                _LOGGER.debug("Frontend component method failed: %s", err)
+                _LOGGER.debug("HACS community folder method failed: %s", err)
         
         if registered:
             _LOGGER.info(
@@ -456,8 +457,8 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
             _LOGGER.warning(
                 "Could not auto-register card. Please manually add to Lovelace resources:"
             )
-            _LOGGER.warning("1. Copy %s to your www folder", card_file)
-            _LOGGER.warning("2. Add /local/simple-chores-card.js to Lovelace resources")
+            _LOGGER.warning("1. Copy %s to /config/www/community/simple-chores/", card_file)
+            _LOGGER.warning("2. Add /local/community/simple-chores/simple-chores-card.js to Lovelace resources")
         
     except Exception as err:
         _LOGGER.error("Failed to register frontend resources: %s", err)
@@ -471,7 +472,7 @@ async def _async_add_to_lovelace_resources(hass: HomeAssistant) -> None:
         _LOGGER.info(
             "Simple Chores card should now be automatically available!"
         )
-        _LOGGER.info("If not, manually add: /local/simple-chores-card.js to Lovelace resources")
+        _LOGGER.info("If not, manually add: /local/community/simple-chores/simple-chores-card.js to Lovelace resources")
         
     except Exception as err:
         _LOGGER.debug("Resource registration info failed: %s", err)

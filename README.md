@@ -142,14 +142,19 @@ The Simple Chores card is **automatically loaded** when you install the integrat
 If automatic registration doesn't work on your Home Assistant version:
 
 1. **Check the logs** - the integration will tell you if manual setup is needed
-2. **Add the resource manually**:
+2. **Copy the card file**:
+   ```bash
+   mkdir -p /config/www/community/simple-chores
+   cp /config/custom_components/simple_chores/www/simple-chores-card.js /config/www/community/simple-chores/
+   ```
+3. **Add the resource manually**:
    - Go to **Settings** → **Dashboards** → **Resources** (⋮ menu)  
-   - Add: `/simple_chores/simple-chores-card.js` (JavaScript Module)
-3. **Add the card** as shown above
+   - Add: `/local/community/simple-chores/simple-chores-card.js` (JavaScript Module)
+4. **Add the card** as shown above
 
-### 📁 Copy Method (Last Resort)
+### 📁 Alternative Method (Non-HACS)
 
-If neither method works:
+If you prefer the simple approach:
 1. Copy `custom_components/simple_chores/www/simple-chores-card.js` to your `www` folder
 2. Add resource: `/local/simple-chores-card.js`
 
