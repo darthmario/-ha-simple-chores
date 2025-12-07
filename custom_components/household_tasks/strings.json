@@ -1,0 +1,170 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Household Tasks",
+        "description": "Configure your household task tracker. You can change these settings later in the integration options.",
+        "data": {
+          "notifications_enabled": "Enable daily notifications",
+          "notification_time": "Notification time"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Household Tasks is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Household Tasks Options",
+        "description": "Configure notification settings for your household tasks.",
+        "data": {
+          "notifications_enabled": "Enable daily notifications",
+          "notification_time": "Notification time",
+          "notify_targets": "Notification targets"
+        }
+      }
+    }
+  },
+  "services": {
+    "add_room": {
+      "name": "Add Room",
+      "description": "Create a new custom room for organizing chores.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "The name of the room."
+        },
+        "icon": {
+          "name": "Icon",
+          "description": "MDI icon for the room (e.g., mdi:garage)."
+        }
+      }
+    },
+    "remove_room": {
+      "name": "Remove Room",
+      "description": "Delete a custom room.",
+      "fields": {
+        "room_id": {
+          "name": "Room ID",
+          "description": "The ID of the room to remove."
+        }
+      }
+    },
+    "update_room": {
+      "name": "Update Room",
+      "description": "Update a custom room's details.",
+      "fields": {
+        "room_id": {
+          "name": "Room ID",
+          "description": "The ID of the room to update."
+        },
+        "name": {
+          "name": "Name",
+          "description": "The new name for the room."
+        },
+        "icon": {
+          "name": "Icon",
+          "description": "The new icon for the room."
+        }
+      }
+    },
+    "add_chore": {
+      "name": "Add Chore",
+      "description": "Create a new chore.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "The name of the chore."
+        },
+        "room_id": {
+          "name": "Room",
+          "description": "The room this chore belongs to."
+        },
+        "frequency": {
+          "name": "Frequency",
+          "description": "How often this chore should be done."
+        },
+        "start_date": {
+          "name": "Start Date",
+          "description": "When this chore is first due (defaults to today)."
+        }
+      }
+    },
+    "remove_chore": {
+      "name": "Remove Chore",
+      "description": "Delete a chore.",
+      "fields": {
+        "chore_id": {
+          "name": "Chore ID",
+          "description": "The ID of the chore to remove."
+        }
+      }
+    },
+    "update_chore": {
+      "name": "Update Chore",
+      "description": "Update a chore's details.",
+      "fields": {
+        "chore_id": {
+          "name": "Chore ID",
+          "description": "The ID of the chore to update."
+        },
+        "name": {
+          "name": "Name",
+          "description": "The new name for the chore."
+        },
+        "room_id": {
+          "name": "Room",
+          "description": "The new room for the chore."
+        },
+        "frequency": {
+          "name": "Frequency",
+          "description": "The new frequency for the chore."
+        }
+      }
+    },
+    "complete_chore": {
+      "name": "Complete Chore",
+      "description": "Mark a chore as completed and schedule the next occurrence.",
+      "fields": {
+        "chore_id": {
+          "name": "Chore ID",
+          "description": "The ID of the chore to complete."
+        },
+        "user_id": {
+          "name": "User ID",
+          "description": "Override the user who completed the chore (defaults to current user)."
+        }
+      }
+    },
+    "skip_chore": {
+      "name": "Skip Chore",
+      "description": "Skip a chore to the next scheduled occurrence without marking it complete.",
+      "fields": {
+        "chore_id": {
+          "name": "Chore ID",
+          "description": "The ID of the chore to skip."
+        }
+      }
+    },
+    "get_history": {
+      "name": "Get History",
+      "description": "Get the completion history for a chore.",
+      "fields": {
+        "chore_id": {
+          "name": "Chore ID",
+          "description": "The ID of the chore to get history for."
+        }
+      }
+    },
+    "get_user_stats": {
+      "name": "Get User Stats",
+      "description": "Get completion statistics for all users."
+    },
+    "send_due_notification": {
+      "name": "Send Due Notification",
+      "description": "Manually send a notification with chores due today."
+    }
+  }
+}
