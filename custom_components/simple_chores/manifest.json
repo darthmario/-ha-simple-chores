@@ -1,0 +1,13 @@
+{
+  "domain": "simple_chores",
+  "name": "Simple Chores",
+  "codeowners": ["@nathancraddock"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/nathancraddock/simple_chores",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/nathancraddock/simple_chores/issues",
+  "requirements": ["python-dateutil>=2.8.0"],
+  "version": "1.0.0"
+}
