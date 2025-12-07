@@ -113,31 +113,36 @@ service: simple_chores.send_due_notification
 
 ## Custom Lovelace Card
 
-A beautiful custom card is **automatically included** with the integration!
+A beautiful custom card is **completely automatically installed** with the integration! 🎉
 
-### Automatic Installation ✨
+### ✨ Fully Automatic Installation
 
-When you install the Simple Chores integration, the card is automatically made available. No manual file copying required!
+The Simple Chores card is **automatically loaded** when you install the integration. No manual steps required!
 
-### Manual Setup (One-time)
-
-1. **Add the resource** in your Lovelace configuration:
-   - Go to **Settings** → **Dashboards** → **Resources** (⋮ menu)
-   - Click **Add Resource**
-   - URL: `/simple_chores/simple-chores-card.js`
-   - Resource type: **JavaScript Module**
-   - Click **Create**
-
-2. **Add the card** to your dashboard:
+1. **Install the integration** (via HACS or manually)
+2. **Restart Home Assistant** 
+3. **Add the card** directly to any dashboard:
    ```yaml
    type: custom:simple-chores-card
    show_completed: false
    default_room: all
    ```
 
-### Alternative: Copy Method
+**That's it!** The card resources are automatically registered by the integration.
 
-If the automatic method doesn't work, you can copy the file:
+### 🔧 Manual Installation (Fallback)
+
+If automatic registration doesn't work on your Home Assistant version:
+
+1. **Check the logs** - the integration will tell you if manual setup is needed
+2. **Add the resource manually**:
+   - Go to **Settings** → **Dashboards** → **Resources** (⋮ menu)  
+   - Add: `/simple_chores/simple-chores-card.js` (JavaScript Module)
+3. **Add the card** as shown above
+
+### 📁 Copy Method (Last Resort)
+
+If neither method works:
 1. Copy `custom_components/simple_chores/www/simple-chores-card.js` to your `www` folder
 2. Add resource: `/local/simple-chores-card.js`
 

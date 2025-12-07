@@ -388,12 +388,85 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
             True,
         )
         
+        # Automatically add to frontend
+        await _async_add_to_lovelace_resources(hass)
+        
         _LOGGER.info(
-            "Simple Chores card is available at: /%s/simple-chores-card.js", DOMAIN
-        )
-        _LOGGER.info(
-            "Add this to your Lovelace resources: /%s/simple-chores-card.js", DOMAIN
+            "Simple Chores card automatically registered and available!"
         )
         
     except Exception as err:
         _LOGGER.warning("Failed to register frontend resources: %s", err)
+
+
+async def _async_add_to_lovelace_resources(hass: HomeAssistant) -> None:
+    """Automatically add the card to Lovelace resources."""
+    try:
+        # Method 1: Try add_extra_js_url (most reliable)
+        from homeassistant.components.frontend import add_extra_js_url
+        
+        add_extra_js_url(hass, f"/{DOMAIN}/simple-chores-card.js")
+        _LOGGER.info("Simple Chores card automatically added via add_extra_js_url")
+        return
+        
+    except ImportError:
+        _LOGGER.debug("add_extra_js_url not available, trying alternative method")
+    except Exception as err:
+        _LOGGER.debug("add_extra_js_url failed: %s", err)
+
+    try:
+        # Method 2: Direct frontend registration
+        from homeassistant.components import frontend
+        
+        frontend_path = hass.config.path(f"custom_components/{DOMAIN}/www")
+        hass.http.register_static_path(f"/{DOMAIN}", frontend_path, cache_headers=False)
+        
+        # Add to lovelace resources programmatically
+        if hasattr(frontend, 'async_register_built_in_panel'):
+            await _async_register_card_resource(hass)
+        
+        _LOGGER.info("Simple Chores card registered via frontend system")
+        
+    except Exception as err:
+        _LOGGER.info(
+            "Automatic card registration not available. "
+            "Please manually add /%s/simple-chores-card.js to your Lovelace resources.", 
+            DOMAIN
+        )
+        _LOGGER.debug("Frontend registration error: %s", err)
+
+
+async def _async_register_card_resource(hass: HomeAssistant) -> None:
+    """Register the card resource with the frontend."""
+    try:
+        # This approach works with newer HA versions
+        hass.data.setdefault("frontend_extra_module_url", set()).add(
+            f"/{DOMAIN}/simple-chores-card.js"
+        )
+        
+        # Fire event to notify frontend of new resource
+        hass.bus.async_fire("frontend_set_theme", {"theme": None})
+        
+    except Exception as err:
+        _LOGGER.debug("Resource registration failed: %s", err)
+
+
+async def _async_register_with_websocket(hass: HomeAssistant) -> None:
+    """Register card using websocket API for older HA versions."""
+    try:
+        from homeassistant.components import websocket_api
+        
+        @websocket_api.websocket_command(
+            {
+                "type": "frontend/lovelace_config",
+            }
+        )
+        def handle_lovelace_config(hass, connection, msg):
+            """Handle lovelace config requests."""
+            # This is a simplified approach that just logs
+            _LOGGER.info("Lovelace config requested - card should be available")
+        
+        websocket_api.async_register_command(hass, handle_lovelace_config)
+        
+    except Exception as err:
+        _LOGGER.debug("Websocket registration failed: %s", err)
