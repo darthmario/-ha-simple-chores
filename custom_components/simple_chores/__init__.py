@@ -445,8 +445,9 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
             card_url = "/local/community/simple-chores/simple-chores-card.js"
             add_extra_js_url(hass, card_url)
             
-            # Also try to auto-register with Lovelace
-            await _async_auto_register_lovelace_resource(hass, card_url)
+            # Note: Automatic lovelace resource registration disabled to avoid I/O blocking warnings
+            # Users should manually add the resource if it doesn't auto-register via add_extra_js_url
+            # await _async_auto_register_lovelace_resource(hass, card_url)
             
             registered = True
             _LOGGER.info("Card copied to HACS community folder and registered: %s", card_url)
@@ -543,39 +544,44 @@ async def _async_auto_register_lovelace_resource(hass: HomeAssistant, url: str) 
         _LOGGER.debug("Method 2 (Websocket API) failed: %s", err)
     
     try:
-        # Method 3: Direct file modification approach
+        # Method 3: Direct file modification approach (async)
         import json
         import os
         
         # Try to modify .storage/lovelace_resources directly (careful approach)
         storage_path = hass.config.path(".storage/lovelace_resources")
         
-        if os.path.exists(storage_path):
-            with open(storage_path, 'r') as f:
-                storage_data = json.load(f)
-            
-            resources = storage_data.get("data", {}).get("items", [])
-            
-            # Check if resource already exists
-            existing = any(item.get("url") == url for item in resources)
-            
-            if not existing:
-                new_resource = {
-                    "id": f"simple_chores_{len(resources)}",
-                    "url": url,
-                    "type": "module"
-                }
-                resources.append(new_resource)
+        def _modify_lovelace_resources():
+            if os.path.exists(storage_path):
+                with open(storage_path, 'r') as f:
+                    storage_data = json.load(f)
                 
-                # Save back to file
-                with open(storage_path, 'w') as f:
-                    json.dump(storage_data, f, indent=2)
+                resources = storage_data.get("data", {}).get("items", [])
                 
-                _LOGGER.info("Added card resource via direct storage modification")
+                # Check if resource already exists
+                existing = any(item.get("url") == url for item in resources)
                 
-                # Fire event to reload resources
-                hass.bus.async_fire("lovelace_updated", {"mode": "storage"})
-                return True
+                if not existing:
+                    new_resource = {
+                        "id": f"simple_chores_{len(resources)}",
+                        "url": url,
+                        "type": "module"
+                    }
+                    resources.append(new_resource)
+                    
+                    # Save back to file
+                    with open(storage_path, 'w') as f:
+                        json.dump(storage_data, f, indent=2)
+                    
+                    return True
+            return False
+        
+        # Run file operations in executor to avoid blocking
+        if await hass.async_add_executor_job(_modify_lovelace_resources):
+            _LOGGER.info("Added card resource via direct storage modification")
+            # Fire event to reload resources
+            hass.bus.async_fire("lovelace_updated", {"mode": "storage"})
+            return True
         
     except Exception as err:
         _LOGGER.debug("Method 3 (Direct storage) failed: %s", err)
