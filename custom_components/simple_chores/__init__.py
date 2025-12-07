@@ -422,30 +422,31 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
             except Exception as err:
                 _LOGGER.debug("aiohttp router method failed: %s", err)
         
-        # Method 3: HACS community folder approach (proper HACS convention)
-        if not registered:
-            try:
-                from homeassistant.components.frontend import add_extra_js_url
-                
-                # Copy the file to HACS community directory structure
-                import shutil
-                community_dir = hass.config.path("www/community/simple-chores")
-                if not os.path.exists(community_dir):
-                    os.makedirs(community_dir)
-                
-                target_file = os.path.join(community_dir, "simple-chores-card.js")
-                shutil.copy2(card_file, target_file)
-                
-                card_url = "/local/community/simple-chores/simple-chores-card.js"
-                add_extra_js_url(hass, card_url)
-                
-                # Also try to auto-register with Lovelace
-                await _async_auto_register_lovelace_resource(hass, card_url)
-                
-                registered = True
-                _LOGGER.info("Card copied to HACS community folder and registered: %s", card_url)
-            except Exception as err:
-                _LOGGER.debug("HACS community folder method failed: %s", err)
+        # Method 3: HACS community folder approach (ALWAYS try this for HACS compatibility)
+        try:
+            from homeassistant.components.frontend import add_extra_js_url
+            
+            # Copy the file to HACS community directory structure
+            import shutil
+            community_dir = hass.config.path("www/community/simple-chores")
+            if not os.path.exists(community_dir):
+                os.makedirs(community_dir)
+            
+            target_file = os.path.join(community_dir, "simple-chores-card.js")
+            # Always copy to ensure file is up to date
+            shutil.copy2(card_file, target_file)
+            
+            card_url = "/local/community/simple-chores/simple-chores-card.js"
+            add_extra_js_url(hass, card_url)
+            
+            # Also try to auto-register with Lovelace
+            await _async_auto_register_lovelace_resource(hass, card_url)
+            
+            registered = True
+            _LOGGER.info("Card copied to HACS community folder and registered: %s", card_url)
+            _LOGGER.info("Card should be accessible at: %s", card_url)
+        except Exception as err:
+            _LOGGER.error("HACS community folder method failed: %s", err)
         
         if registered:
             _LOGGER.info(
