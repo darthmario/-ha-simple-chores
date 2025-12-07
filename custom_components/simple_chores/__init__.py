@@ -381,22 +381,32 @@ async def _async_send_due_notification(
 async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
     """Register frontend resources for the Lovelace card."""
     try:
-        # Register the card JavaScript file as a static path
-        hass.http.register_static_path(
-            f"/{DOMAIN}/simple-chores-card.js",
-            hass.config.path(f"custom_components/{DOMAIN}/www/simple-chores-card.js"),
-            True,
-        )
+        import os
         
-        # Automatically add to frontend
-        await _async_add_to_lovelace_resources(hass)
+        # Register the www directory as a static path
+        www_path = hass.config.path(f"custom_components/{DOMAIN}/www")
+        card_file = os.path.join(www_path, "simple-chores-card.js")
         
-        _LOGGER.info(
-            "Simple Chores card automatically registered and available!"
-        )
+        # Check if files exist
+        if os.path.exists(www_path) and os.path.exists(card_file):
+            hass.http.register_static_path(f"/{DOMAIN}", www_path, cache_headers=False)
+            
+            _LOGGER.info(
+                "Simple Chores card static path registered: /%s/simple-chores-card.js", DOMAIN
+            )
+            _LOGGER.debug("Card file exists at: %s", card_file)
+            
+            # Automatically add to frontend
+            await _async_add_to_lovelace_resources(hass)
+            
+            _LOGGER.info("Simple Chores card registration completed!")
+        else:
+            _LOGGER.error("Card file not found at: %s", card_file)
+            _LOGGER.error("www directory exists: %s", os.path.exists(www_path))
         
     except Exception as err:
         _LOGGER.warning("Failed to register frontend resources: %s", err)
+        _LOGGER.warning("Path attempted: %s", hass.config.path(f"custom_components/{DOMAIN}/www"))
 
 
 async def _async_add_to_lovelace_resources(hass: HomeAssistant) -> None:
@@ -415,17 +425,10 @@ async def _async_add_to_lovelace_resources(hass: HomeAssistant) -> None:
         _LOGGER.debug("add_extra_js_url failed: %s", err)
 
     try:
-        # Method 2: Direct frontend registration
-        from homeassistant.components import frontend
+        # Method 2: Try alternative registration approaches
+        await _async_register_card_resource(hass)
         
-        frontend_path = hass.config.path(f"custom_components/{DOMAIN}/www")
-        hass.http.register_static_path(f"/{DOMAIN}", frontend_path, cache_headers=False)
-        
-        # Add to lovelace resources programmatically
-        if hasattr(frontend, 'async_register_built_in_panel'):
-            await _async_register_card_resource(hass)
-        
-        _LOGGER.info("Simple Chores card registered via frontend system")
+        _LOGGER.info("Simple Chores card registered via alternative method")
         
     except Exception as err:
         _LOGGER.info(
