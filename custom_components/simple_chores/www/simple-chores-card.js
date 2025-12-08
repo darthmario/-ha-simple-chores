@@ -219,7 +219,8 @@ class SimpleChoresCard extends LitElement {
     if (!this.hass) return [];
     
     // Get custom rooms from the sensor attributes 
-    const customRooms = this.hass.states["sensor.simple_chores_total"]?.attributes?.rooms || [];
+    const sensorState = this.hass.states["sensor.simple_chores_total"];
+    const customRooms = sensorState?.attributes?.rooms || [];
     
     // Get Home Assistant areas
     const areas = Object.values(this.hass.areas || {}).map(area => ({
@@ -227,12 +228,17 @@ class SimpleChoresCard extends LitElement {
       name: area.name || area.area_id
     }));
     
+    console.log("Simple Chores Card: _getRooms() - Sensor state:", sensorState);
+    console.log("Simple Chores Card: _getRooms() - Custom rooms:", customRooms);
+    console.log("Simple Chores Card: _getRooms() - HA areas:", areas);
+    
     // Combine and deduplicate by id
     const allRooms = [...areas, ...customRooms];
     const uniqueRooms = allRooms.filter((room, index, self) => 
       index === self.findIndex(r => r.id === room.id)
     );
     
+    console.log("Simple Chores Card: _getRooms() - Final rooms:", uniqueRooms);
     return uniqueRooms;
   }
 
@@ -314,6 +320,10 @@ class SimpleChoresCard extends LitElement {
     // Check for duplicate room names
     const roomName = this._newRoomName.trim();
     const existingRooms = this._getRooms();
+    
+    console.log("Simple Chores Card: Current rooms:", existingRooms);
+    console.log("Simple Chores Card: Trying to create room:", roomName);
+    
     const duplicateRoom = existingRooms.find(room => 
       room.name.toLowerCase() === roomName.toLowerCase()
     );
@@ -323,15 +333,22 @@ class SimpleChoresCard extends LitElement {
       return;
     }
 
+    console.log("Simple Chores Card: Calling add_room service with:", {
+      name: roomName,
+      icon: this._newRoomIcon || "mdi:home"
+    });
+
     this.hass.callService("simple_chores", "add_room", {
       name: roomName,
       icon: this._newRoomIcon || "mdi:home"
-    }).then(() => {
+    }).then((result) => {
+      console.log("Simple Chores Card: Service call succeeded:", result);
       this._showToast(`Room "${roomName}" created successfully!`);
       this._closeAddRoomModal();
       // Force a refresh of the card data
-      this.requestUpdate();
+      setTimeout(() => this.requestUpdate(), 1000); // Wait a moment for the backend to update
     }).catch(error => {
+      console.error("Simple Chores Card: Service call failed:", error);
       this._showToast(`Error creating room: ${error.message}`);
     });
   }
