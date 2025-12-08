@@ -311,11 +311,23 @@ class SimpleChoresCard extends LitElement {
       return;
     }
 
+    // Check for duplicate room names
+    const roomName = this._newRoomName.trim();
+    const existingRooms = this._getRooms();
+    const duplicateRoom = existingRooms.find(room => 
+      room.name.toLowerCase() === roomName.toLowerCase()
+    );
+
+    if (duplicateRoom) {
+      this._showToast(`A room named "${roomName}" already exists`);
+      return;
+    }
+
     this.hass.callService("simple_chores", "add_room", {
-      name: this._newRoomName.trim(),
+      name: roomName,
       icon: this._newRoomIcon || "mdi:home"
     }).then(() => {
-      this._showToast(`Room "${this._newRoomName}" created successfully!`);
+      this._showToast(`Room "${roomName}" created successfully!`);
       this._closeAddRoomModal();
       // Force a refresh of the card data
       this.requestUpdate();
