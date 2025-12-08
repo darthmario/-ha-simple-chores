@@ -115,13 +115,19 @@ service: simple_chores.send_due_notification
 
 A beautiful custom card is **completely automatically installed** with the integration! 🎉
 
-### ✨ Fully Automatic Installation
+### ✨ Easy Installation with Automatic File Setup
 
-The Simple Chores card is **automatically loaded** when you install the integration. No manual steps required!
+The Simple Chores card is **automatically copied to the correct location** when you install the integration!
 
 1. **Install the integration** (via HACS or manually)
 2. **Restart Home Assistant** 
-3. **Add the card** using either method:
+3. **Add the resource** (one-time setup):
+   - Go to **Settings** → **Dashboards** → **Resources** (⋮ menu)
+   - Click **"+ Add Resource"**
+   - **URL**: `/local/community/simple-chores/simple-chores-card.js`
+   - **Resource Type**: **JavaScript Module**
+   - Click **"Create"**
+4. **Add the card** using either method:
 
    **Method A: Visual Picker** 🎨
    - Edit any dashboard → Add Card
@@ -135,11 +141,9 @@ The Simple Chores card is **automatically loaded** when you install the integrat
    default_room: all
    ```
 
-**That's it!** The card appears in the visual card picker just like built-in cards.
+### 🔧 Manual Installation (Alternative Method)
 
-### 🔧 Manual Installation (Fallback)
-
-If automatic registration doesn't work on your Home Assistant version:
+If you prefer to copy the file manually:
 
 1. **Check the logs** - the integration will tell you if manual setup is needed
 2. **Copy the card file**:

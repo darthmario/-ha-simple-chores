@@ -15,12 +15,18 @@ class SimpleChoresCard extends LitElement {
       hass: { type: Object },
       config: { type: Object },
       _selectedRoom: { type: String },
+      _showAddRoomModal: { type: Boolean },
+      _newRoomName: { type: String },
+      _newRoomIcon: { type: String },
     };
   }
 
   constructor() {
     super();
     this._selectedRoom = "all";
+    this._showAddRoomModal = false;
+    this._newRoomName = "";
+    this._newRoomIcon = "";
   }
 
   static getStubConfig() {
@@ -56,15 +62,20 @@ class SimpleChoresCard extends LitElement {
       <ha-card>
         <div class="card-header">
           <div class="name">Simple Chores</div>
-          <div class="room-selector">
-            <select @change=${this._roomChanged}>
-              <option value="all" ?selected=${this._selectedRoom === "all"}>All Rooms</option>
-              ${rooms.map(room => html`
-                <option value=${room.id} ?selected=${this._selectedRoom === room.id}>
-                  ${room.name}
-                </option>
-              `)}
-            </select>
+          <div class="header-controls">
+            <div class="room-selector">
+              <select @change=${this._roomChanged}>
+                <option value="all" ?selected=${this._selectedRoom === "all"}>All Rooms</option>
+                ${rooms.map(room => html`
+                  <option value=${room.id} ?selected=${this._selectedRoom === room.id}>
+                    ${room.name}
+                  </option>
+                `)}
+              </select>
+            </div>
+            <button class="add-room-btn" @click=${this._openAddRoomModal} title="Add Custom Room">
+              <ha-icon icon="mdi:plus"></ha-icon>
+            </button>
           </div>
         </div>
         
@@ -73,6 +84,8 @@ class SimpleChoresCard extends LitElement {
           ${this._renderChoreList(dueToday, "Due Today")}
           ${this._renderChoreList(dueThisWeek, "Due This Week")}
         </div>
+        
+        ${this._renderAddRoomModal()}
       </ha-card>
     `;
   }
@@ -210,6 +223,94 @@ class SimpleChoresCard extends LitElement {
     this.dispatchEvent(event);
   }
 
+  _openAddRoomModal() {
+    this._showAddRoomModal = true;
+    this._newRoomName = "";
+    this._newRoomIcon = "mdi:home";
+  }
+
+  _closeAddRoomModal() {
+    this._showAddRoomModal = false;
+    this._newRoomName = "";
+    this._newRoomIcon = "";
+  }
+
+  _handleRoomNameInput(e) {
+    this._newRoomName = e.target.value;
+  }
+
+  _handleRoomIconInput(e) {
+    this._newRoomIcon = e.target.value;
+  }
+
+  _submitAddRoom() {
+    if (!this._newRoomName.trim()) {
+      this._showToast("Room name is required");
+      return;
+    }
+
+    this.hass.callService("simple_chores", "create_custom_room", {
+      name: this._newRoomName.trim(),
+      icon: this._newRoomIcon || "mdi:home"
+    }).then(() => {
+      this._showToast(`Room "${this._newRoomName}" created successfully!`);
+      this._closeAddRoomModal();
+      // Force a refresh of the card data
+      this.requestUpdate();
+    }).catch(error => {
+      this._showToast(`Error creating room: ${error.message}`);
+    });
+  }
+
+  _renderAddRoomModal() {
+    if (!this._showAddRoomModal) {
+      return html``;
+    }
+
+    return html`
+      <div class="modal-overlay" @click=${this._closeAddRoomModal}>
+        <div class="modal-content" @click=${(e) => e.stopPropagation()}>
+          <div class="modal-header">
+            <h3>Add Custom Room</h3>
+            <button class="close-btn" @click=${this._closeAddRoomModal}>
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="room-name">Room Name *</label>
+              <input 
+                id="room-name"
+                type="text" 
+                .value=${this._newRoomName}
+                @input=${this._handleRoomNameInput}
+                placeholder="Enter room name..."
+                maxlength="50"
+              />
+            </div>
+            <div class="form-group">
+              <label for="room-icon">Icon (optional)</label>
+              <input 
+                id="room-icon"
+                type="text" 
+                .value=${this._newRoomIcon}
+                @input=${this._handleRoomIconInput}
+                placeholder="mdi:home"
+              />
+              <small>Use MDI icon names like: mdi:bed, mdi:sofa, mdi:car, etc.</small>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="cancel-btn" @click=${this._closeAddRoomModal}>Cancel</button>
+            <button class="submit-btn" @click=${this._submitAddRoom} ?disabled=${!this._newRoomName.trim()}>
+              Create Room
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   static get styles() {
     return css`
       :host {
@@ -224,6 +325,30 @@ class SimpleChoresCard extends LitElement {
         border-bottom: 1px solid var(--divider-color);
         background: var(--primary-color);
         color: var(--text-primary-color);
+      }
+      
+      .header-controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      
+      .add-room-btn {
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        border-radius: 50%;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-primary-color);
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+      
+      .add-room-btn:hover {
+        background: rgba(255, 255, 255, 0.3);
       }
       
       .name {
@@ -389,6 +514,148 @@ class SimpleChoresCard extends LitElement {
         border-radius: 8px;
       }
 
+      /* Modal Styles */
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      
+      .modal-content {
+        background: var(--card-background-color);
+        border-radius: 12px;
+        max-width: 400px;
+        width: 100%;
+        max-height: 80vh;
+        overflow: auto;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      }
+      
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 20px 0 20px;
+        border-bottom: 1px solid var(--divider-color);
+        padding-bottom: 16px;
+        margin-bottom: 20px;
+      }
+      
+      .modal-header h3 {
+        margin: 0;
+        color: var(--primary-text-color);
+        font-size: 1.2em;
+        font-weight: 500;
+      }
+      
+      .close-btn {
+        background: none;
+        border: none;
+        color: var(--secondary-text-color);
+        cursor: pointer;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background-color 0.2s;
+      }
+      
+      .close-btn:hover {
+        background: var(--secondary-background-color);
+      }
+      
+      .modal-body {
+        padding: 0 20px 20px 20px;
+      }
+      
+      .form-group {
+        margin-bottom: 20px;
+      }
+      
+      .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--primary-text-color);
+        font-weight: 500;
+        font-size: 14px;
+      }
+      
+      .form-group input {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid var(--divider-color);
+        border-radius: 8px;
+        background: var(--card-background-color);
+        color: var(--primary-text-color);
+        font-size: 14px;
+        box-sizing: border-box;
+        transition: border-color 0.2s;
+      }
+      
+      .form-group input:focus {
+        outline: none;
+        border-color: var(--primary-color);
+      }
+      
+      .form-group small {
+        display: block;
+        margin-top: 4px;
+        color: var(--secondary-text-color);
+        font-size: 12px;
+      }
+      
+      .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        padding: 20px;
+        border-top: 1px solid var(--divider-color);
+      }
+      
+      .cancel-btn, .submit-btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      
+      .cancel-btn {
+        background: var(--secondary-background-color);
+        color: var(--secondary-text-color);
+      }
+      
+      .cancel-btn:hover {
+        background: var(--divider-color);
+      }
+      
+      .submit-btn {
+        background: var(--primary-color);
+        color: white;
+      }
+      
+      .submit-btn:hover:not(:disabled) {
+        background: var(--dark-primary-color);
+      }
+      
+      .submit-btn:disabled {
+        background: var(--disabled-text-color);
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+
       @media (max-width: 600px) {
         .chore-item {
           flex-direction: column;
@@ -402,6 +669,15 @@ class SimpleChoresCard extends LitElement {
         
         .stats {
           grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+        }
+        
+        .modal-overlay {
+          padding: 10px;
+        }
+        
+        .modal-content {
+          max-width: none;
+          width: 100%;
         }
       }
     `;
