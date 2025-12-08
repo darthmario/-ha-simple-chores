@@ -218,28 +218,25 @@ class SimpleChoresCard extends LitElement {
   _getRooms() {
     if (!this.hass) return [];
     
-    // Get custom rooms from the sensor attributes 
-    const sensorState = this.hass.states["sensor.simple_chores_total"];
-    const customRooms = sensorState?.attributes?.rooms || [];
+    // Get rooms from sensor attributes (the coordinator provides this data)
+    const totalSensor = this.hass.states["sensor.simple_chores_total"];
     
-    // Get Home Assistant areas
+    if (totalSensor && totalSensor.attributes && totalSensor.attributes.rooms) {
+      const rooms = totalSensor.attributes.rooms;
+      console.log("Simple Chores Card: _getRooms() - Found rooms in sensor:", rooms);
+      return rooms;
+    }
+    
+    console.log("Simple Chores Card: _getRooms() - No rooms found in sensor, falling back to HA areas");
+    
+    // Fallback: Get just Home Assistant areas if sensor data not available
     const areas = Object.values(this.hass.areas || {}).map(area => ({
-      id: area.area_id,
+      id: `area_${area.area_id}`,  // Match the coordinator's room ID format
       name: area.name || area.area_id
     }));
     
-    console.log("Simple Chores Card: _getRooms() - Sensor state:", sensorState);
-    console.log("Simple Chores Card: _getRooms() - Custom rooms:", customRooms);
-    console.log("Simple Chores Card: _getRooms() - HA areas:", areas);
-    
-    // Combine and deduplicate by id
-    const allRooms = [...areas, ...customRooms];
-    const uniqueRooms = allRooms.filter((room, index, self) => 
-      index === self.findIndex(r => r.id === room.id)
-    );
-    
-    console.log("Simple Chores Card: _getRooms() - Final rooms:", uniqueRooms);
-    return uniqueRooms;
+    console.log("Simple Chores Card: _getRooms() - HA areas fallback:", areas);
+    return areas;
   }
 
   _filterChoresByRoom(chores) {
