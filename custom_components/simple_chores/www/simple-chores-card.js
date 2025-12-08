@@ -217,7 +217,23 @@ class SimpleChoresCard extends LitElement {
 
   _getRooms() {
     if (!this.hass) return [];
-    return this.hass.states["sensor.simple_chores_total"]?.attributes?.rooms || [];
+    
+    // Get custom rooms from the sensor attributes 
+    const customRooms = this.hass.states["sensor.simple_chores_total"]?.attributes?.rooms || [];
+    
+    // Get Home Assistant areas
+    const areas = Object.values(this.hass.areas || {}).map(area => ({
+      id: area.area_id,
+      name: area.name || area.area_id
+    }));
+    
+    // Combine and deduplicate by id
+    const allRooms = [...areas, ...customRooms];
+    const uniqueRooms = allRooms.filter((room, index, self) => 
+      index === self.findIndex(r => r.id === room.id)
+    );
+    
+    return uniqueRooms;
   }
 
   _filterChoresByRoom(chores) {
