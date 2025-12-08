@@ -3,24 +3,24 @@
  * A custom Lovelace card for managing simple chores
  */
 
-// Standard approach used by most HA custom cards
-const LitElement = window.LitElement || Object.getPrototypeOf(
-  customElements.get("hui-view") || customElements.get("ha-panel-lovelace") || {}
-);
-const html = LitElement?.prototype?.html || window.lit?.html || ((strings, ...values) => {
-  let result = strings[0] || '';
-  values.forEach((value, i) => {
-    result += (value ?? '') + (strings[i + 1] || '');
-  });
-  return result;
-});
-const css = LitElement?.prototype?.css || window.lit?.css || ((strings, ...values) => {
-  let result = strings[0] || '';
-  values.forEach((value, i) => {
-    result += (value ?? '') + (strings[i + 1] || '');
-  });
-  return result;
-});
+// Simple and reliable LitElement detection
+const getLitElement = () => {
+  if (window.LitElement) return window.LitElement;
+  
+  // Try to get from existing custom elements
+  const huiView = customElements.get("hui-view");
+  if (huiView) return Object.getPrototypeOf(huiView);
+  
+  const haPanel = customElements.get("ha-panel-lovelace");
+  if (haPanel) return Object.getPrototypeOf(haPanel);
+  
+  // Fallback to HTMLElement
+  return HTMLElement;
+};
+
+const LitElement = getLitElement();
+const html = LitElement.prototype?.html || window.html || ((strings, ...values) => strings.join(''));
+const css = LitElement.prototype?.css || window.css || ((strings, ...values) => strings.join(''));
 
 class SimpleChoresCard extends LitElement {
   static get properties() {
@@ -816,6 +816,7 @@ class SimpleChoresCardEditor extends LitElement {
   }
 }
 
+// Register the custom elements
 customElements.define("simple-chores-card", SimpleChoresCard);
 customElements.define("simple-chores-card-editor", SimpleChoresCardEditor);
 
