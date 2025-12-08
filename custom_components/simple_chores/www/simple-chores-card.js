@@ -3,24 +3,33 @@
  * A custom Lovelace card for managing simple chores
  */
 
-// Simple and reliable LitElement detection
-const getLitElement = () => {
-  if (window.LitElement) return window.LitElement;
-  
-  // Try to get from existing custom elements
-  const huiView = customElements.get("hui-view");
-  if (huiView) return Object.getPrototypeOf(huiView);
-  
-  const haPanel = customElements.get("ha-panel-lovelace");
-  if (haPanel) return Object.getPrototypeOf(haPanel);
-  
-  // Fallback to HTMLElement
-  return HTMLElement;
-};
+// Define card after DOM is loaded and HA is ready
+(function() {
+  'use strict';
 
-const LitElement = getLitElement();
-const html = LitElement.prototype?.html || window.html || ((strings, ...values) => strings.join(''));
-const css = LitElement.prototype?.css || window.css || ((strings, ...values) => strings.join(''));
+  // Wait for HA to be ready
+  const defineCard = () => {
+    // Get LitElement from HA
+    const LitElement = customElements.get("hui-error-card")?.constructor?.prototype?.constructor ||
+                      customElements.get("hui-view")?.constructor ||
+                      window.LitElement ||
+                      HTMLElement;
+
+    const html = window.html || ((strings, ...values) => {
+      let result = strings[0];
+      for (let i = 0; i < values.length; i++) {
+        result += values[i] + strings[i + 1];
+      }
+      return result;
+    });
+
+    const css = window.css || ((strings) => strings[0]);
+
+    if (!LitElement || LitElement === HTMLElement) {
+      console.warn("Simple Chores Card: LitElement not found, deferring...");
+      setTimeout(defineCard, 1000);
+      return;
+    }
 
 class SimpleChoresCard extends LitElement {
   static get properties() {
@@ -816,9 +825,18 @@ class SimpleChoresCardEditor extends LitElement {
   }
 }
 
-// Register the custom elements
-customElements.define("simple-chores-card", SimpleChoresCard);
-customElements.define("simple-chores-card-editor", SimpleChoresCardEditor);
+    // Register the custom elements
+    customElements.define("simple-chores-card", SimpleChoresCard);
+    customElements.define("simple-chores-card-editor", SimpleChoresCardEditor);
+  };
+
+  // Call defineCard when HA is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', defineCard);
+  } else {
+    defineCard();
+  }
+})();
 
 // Wait for customCards to be available and register
 (function() {
