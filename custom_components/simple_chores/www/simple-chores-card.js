@@ -3,11 +3,24 @@
  * A custom Lovelace card for managing simple chores
  */
 
-const LitElement = Object.getPrototypeOf(
-  customElements.get("ha-panel-lovelace")
+// Standard approach used by most HA custom cards
+const LitElement = window.LitElement || Object.getPrototypeOf(
+  customElements.get("hui-view") || customElements.get("ha-panel-lovelace") || {}
 );
-const html = LitElement.prototype.html;
-const css = LitElement.prototype.css;
+const html = LitElement?.prototype?.html || window.lit?.html || ((strings, ...values) => {
+  let result = strings[0] || '';
+  values.forEach((value, i) => {
+    result += (value ?? '') + (strings[i + 1] || '');
+  });
+  return result;
+});
+const css = LitElement?.prototype?.css || window.lit?.css || ((strings, ...values) => {
+  let result = strings[0] || '';
+  values.forEach((value, i) => {
+    result += (value ?? '') + (strings[i + 1] || '');
+  });
+  return result;
+});
 
 class SimpleChoresCard extends LitElement {
   static get properties() {
