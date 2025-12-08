@@ -52,6 +52,11 @@ class SimpleChoresCard extends LitElement {
       _showAddRoomModal: { type: Boolean },
       _newRoomName: { type: String },
       _newRoomIcon: { type: String },
+      _showAddChoreModal: { type: Boolean },
+      _newChoreName: { type: String },
+      _newChoreRoom: { type: String },
+      _newChoreFrequency: { type: String },
+      _newChoreDescription: { type: String },
     };
   }
 
@@ -61,6 +66,11 @@ class SimpleChoresCard extends LitElement {
     this._showAddRoomModal = false;
     this._newRoomName = "";
     this._newRoomIcon = "";
+    this._showAddChoreModal = false;
+    this._newChoreName = "";
+    this._newChoreRoom = "";
+    this._newChoreFrequency = "daily";
+    this._newChoreDescription = "";
   }
 
   static getStubConfig() {
@@ -108,7 +118,10 @@ class SimpleChoresCard extends LitElement {
               </select>
             </div>
             <button class="add-room-btn" @click=${this._openAddRoomModal} title="Add Custom Room">
-              <ha-icon icon="mdi:plus"></ha-icon>
+              <ha-icon icon="mdi:home-plus"></ha-icon>
+            </button>
+            <button class="add-chore-btn" @click=${this._openAddChoreModal} title="Add New Chore">
+              <ha-icon icon="mdi:playlist-plus"></ha-icon>
             </button>
           </div>
         </div>
@@ -120,6 +133,7 @@ class SimpleChoresCard extends LitElement {
         </div>
         
         ${this._renderAddRoomModal()}
+        ${this._renderAddChoreModal()}
       </ha-card>
     `;
   }
@@ -345,6 +359,146 @@ class SimpleChoresCard extends LitElement {
     `;
   }
 
+  _openAddChoreModal() {
+    this._showAddChoreModal = true;
+    this._newChoreName = "";
+    this._newChoreRoom = "";
+    this._newChoreFrequency = "daily";
+    this._newChoreDescription = "";
+  }
+
+  _closeAddChoreModal() {
+    this._showAddChoreModal = false;
+    this._newChoreName = "";
+    this._newChoreRoom = "";
+    this._newChoreFrequency = "daily";
+    this._newChoreDescription = "";
+  }
+
+  _handleChoreNameInput(e) {
+    this._newChoreName = e.target.value;
+  }
+
+  _handleChoreRoomInput(e) {
+    this._newChoreRoom = e.target.value;
+  }
+
+  _handleChoreFrequencyInput(e) {
+    this._newChoreFrequency = e.target.value;
+  }
+
+  _handleChoreDescriptionInput(e) {
+    this._newChoreDescription = e.target.value;
+  }
+
+  _submitAddChore() {
+    if (!this._newChoreName.trim()) {
+      this._showToast("Chore name is required");
+      return;
+    }
+
+    if (!this._newChoreRoom.trim()) {
+      this._showToast("Please select a room");
+      return;
+    }
+
+    this.hass.callService("simple_chores", "create_chore", {
+      name: this._newChoreName.trim(),
+      room: this._newChoreRoom,
+      frequency: this._newChoreFrequency,
+      description: this._newChoreDescription.trim() || null
+    }).then(() => {
+      this._showToast(`Chore "${this._newChoreName}" created successfully!`);
+      this._closeAddChoreModal();
+      // Force a refresh of the card data
+      this.requestUpdate();
+    }).catch(error => {
+      this._showToast(`Error creating chore: ${error.message}`);
+    });
+  }
+
+  _renderAddChoreModal() {
+    if (!this._showAddChoreModal) {
+      return html``;
+    }
+
+    const rooms = this._getRooms();
+
+    return html`
+      <div class="modal-overlay" @click=${this._closeAddChoreModal}>
+        <div class="modal-content" @click=${(e) => e.stopPropagation()}>
+          <div class="modal-header">
+            <h3>Add New Chore</h3>
+            <button class="close-btn" @click=${this._closeAddChoreModal}>
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="chore-name">Chore Name *</label>
+              <input 
+                id="chore-name"
+                type="text" 
+                .value=${this._newChoreName}
+                @input=${this._handleChoreNameInput}
+                placeholder="Enter chore name..."
+                maxlength="100"
+              />
+            </div>
+            <div class="form-group">
+              <label for="chore-room">Room *</label>
+              <select 
+                id="chore-room"
+                .value=${this._newChoreRoom}
+                @change=${this._handleChoreRoomInput}
+              >
+                <option value="">Select a room...</option>
+                ${rooms.map(room => html`
+                  <option value=${room.id}>
+                    ${room.name}
+                  </option>
+                `)}
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="chore-frequency">Frequency *</label>
+              <select 
+                id="chore-frequency"
+                .value=${this._newChoreFrequency}
+                @change=${this._handleChoreFrequencyInput}
+              >
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="biweekly">Every 2 weeks</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Every 3 months</option>
+                <option value="yearly">Yearly</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="chore-description">Description (optional)</label>
+              <textarea 
+                id="chore-description"
+                .value=${this._newChoreDescription}
+                @input=${this._handleChoreDescriptionInput}
+                placeholder="Additional details about the chore..."
+                maxlength="500"
+                rows="3"
+              ></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="cancel-btn" @click=${this._closeAddChoreModal}>Cancel</button>
+            <button class="submit-btn" @click=${this._submitAddChore} 
+                    ?disabled=${!this._newChoreName.trim() || !this._newChoreRoom.trim()}>
+              Create Chore
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   static get styles() {
     return css`
       :host {
@@ -367,7 +521,7 @@ class SimpleChoresCard extends LitElement {
         gap: 12px;
       }
       
-      .add-room-btn {
+      .add-room-btn, .add-chore-btn {
         background: rgba(255, 255, 255, 0.2);
         border: none;
         border-radius: 50%;
@@ -381,7 +535,7 @@ class SimpleChoresCard extends LitElement {
         transition: background-color 0.2s;
       }
       
-      .add-room-btn:hover {
+      .add-room-btn:hover, .add-chore-btn:hover {
         background: rgba(255, 255, 255, 0.3);
       }
       
@@ -624,7 +778,7 @@ class SimpleChoresCard extends LitElement {
         font-size: 14px;
       }
       
-      .form-group input {
+      .form-group input, .form-group select, .form-group textarea {
         width: 100%;
         padding: 12px;
         border: 2px solid var(--divider-color);
@@ -634,11 +788,21 @@ class SimpleChoresCard extends LitElement {
         font-size: 14px;
         box-sizing: border-box;
         transition: border-color 0.2s;
+        font-family: inherit;
       }
       
-      .form-group input:focus {
+      .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
         outline: none;
         border-color: var(--primary-color);
+      }
+      
+      .form-group textarea {
+        resize: vertical;
+        min-height: 80px;
+      }
+      
+      .form-group select {
+        cursor: pointer;
       }
       
       .form-group small {
