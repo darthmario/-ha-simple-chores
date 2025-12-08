@@ -56,7 +56,6 @@ class SimpleChoresCard extends LitElement {
       _newChoreName: { type: String },
       _newChoreRoom: { type: String },
       _newChoreFrequency: { type: String },
-      _newChoreDescription: { type: String },
     };
   }
 
@@ -70,7 +69,6 @@ class SimpleChoresCard extends LitElement {
     this._newChoreName = "";
     this._newChoreRoom = "";
     this._newChoreFrequency = "daily";
-    this._newChoreDescription = "";
   }
 
   static getStubConfig() {
@@ -297,7 +295,7 @@ class SimpleChoresCard extends LitElement {
       return;
     }
 
-    this.hass.callService("simple_chores", "create_custom_room", {
+    this.hass.callService("simple_chores", "add_room", {
       name: this._newRoomName.trim(),
       icon: this._newRoomIcon || "mdi:home"
     }).then(() => {
@@ -364,7 +362,6 @@ class SimpleChoresCard extends LitElement {
     this._newChoreName = "";
     this._newChoreRoom = "";
     this._newChoreFrequency = "daily";
-    this._newChoreDescription = "";
   }
 
   _closeAddChoreModal() {
@@ -372,7 +369,6 @@ class SimpleChoresCard extends LitElement {
     this._newChoreName = "";
     this._newChoreRoom = "";
     this._newChoreFrequency = "daily";
-    this._newChoreDescription = "";
   }
 
   _handleChoreNameInput(e) {
@@ -387,9 +383,6 @@ class SimpleChoresCard extends LitElement {
     this._newChoreFrequency = e.target.value;
   }
 
-  _handleChoreDescriptionInput(e) {
-    this._newChoreDescription = e.target.value;
-  }
 
   _submitAddChore() {
     if (!this._newChoreName.trim()) {
@@ -402,11 +395,10 @@ class SimpleChoresCard extends LitElement {
       return;
     }
 
-    this.hass.callService("simple_chores", "create_chore", {
+    this.hass.callService("simple_chores", "add_chore", {
       name: this._newChoreName.trim(),
-      room: this._newChoreRoom,
-      frequency: this._newChoreFrequency,
-      description: this._newChoreDescription.trim() || null
+      room_id: this._newChoreRoom,
+      frequency: this._newChoreFrequency
     }).then(() => {
       this._showToast(`Chore "${this._newChoreName}" created successfully!`);
       this._closeAddChoreModal();
@@ -469,22 +461,10 @@ class SimpleChoresCard extends LitElement {
               >
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
-                <option value="biweekly">Every 2 weeks</option>
                 <option value="monthly">Monthly</option>
-                <option value="quarterly">Every 3 months</option>
+                <option value="quarterly">Quarterly</option>
                 <option value="yearly">Yearly</option>
               </select>
-            </div>
-            <div class="form-group">
-              <label for="chore-description">Description (optional)</label>
-              <textarea 
-                id="chore-description"
-                .value=${this._newChoreDescription}
-                @input=${this._handleChoreDescriptionInput}
-                placeholder="Additional details about the chore..."
-                maxlength="500"
-                rows="3"
-              ></textarea>
             </div>
           </div>
           <div class="modal-footer">
