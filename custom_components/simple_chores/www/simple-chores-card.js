@@ -218,13 +218,27 @@ class SimpleChoresCard extends LitElement {
   _getRooms() {
     if (!this.hass) return [];
     
-    // Debug: Check what simple_chores sensors exist
-    const allSensors = Object.keys(this.hass.states).filter(key => 
+    // Debug: Check what sensors exist (both old and new names)
+    const simpleChoreSensors = Object.keys(this.hass.states).filter(key => 
       key.startsWith('sensor.simple_chores')
     );
-    console.log("Simple Chores Card: Available sensors:", allSensors);
+    const householdTaskSensors = Object.keys(this.hass.states).filter(key => 
+      key.startsWith('sensor.household_tasks')
+    );
     
-    // Check each sensor for room data
+    console.log("Simple Chores Card: simple_chores sensors:", simpleChoreSensors);
+    console.log("Simple Chores Card: household_tasks sensors:", householdTaskSensors);
+    
+    const allSensors = [...simpleChoreSensors, ...householdTaskSensors];
+    
+    // First, try the correct sensor name we know exists
+    const totalSensor = this.hass.states["sensor.household_tasks_total"];
+    if (totalSensor && totalSensor.attributes && totalSensor.attributes.rooms) {
+      console.log("Simple Chores Card: Found rooms in household_tasks_total:", totalSensor.attributes.rooms);
+      return totalSensor.attributes.rooms;
+    }
+    
+    // Check each sensor for room data (fallback)
     for (const sensorName of allSensors) {
       const sensor = this.hass.states[sensorName];
       if (sensor && sensor.attributes) {
