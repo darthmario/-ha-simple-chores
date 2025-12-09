@@ -79,7 +79,7 @@ class HouseholdTasksOptionsFlow(OptionsFlow):
 
     def __init__(self, config_entry: ConfigEntry) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
+        self._config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -102,19 +102,19 @@ class HouseholdTasksOptionsFlow(OptionsFlow):
                 {
                     vol.Optional(
                         CONF_NOTIFICATIONS_ENABLED,
-                        default=self.config_entry.options.get(
+                        default=self._config_entry.options.get(
                             CONF_NOTIFICATIONS_ENABLED, DEFAULT_NOTIFICATIONS_ENABLED
                         ),
                     ): selector.BooleanSelector(),
                     vol.Optional(
                         CONF_NOTIFICATION_TIME,
-                        default=self.config_entry.options.get(
+                        default=self._config_entry.options.get(
                             CONF_NOTIFICATION_TIME, DEFAULT_NOTIFICATION_TIME
                         ),
                     ): selector.TimeSelector(),
                     vol.Optional(
                         CONF_NOTIFY_TARGETS,
-                        default=self.config_entry.options.get(CONF_NOTIFY_TARGETS, []),
+                        default=self._config_entry.options.get(CONF_NOTIFY_TARGETS, []),
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=notify_services,
