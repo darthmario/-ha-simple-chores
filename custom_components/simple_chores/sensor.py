@@ -22,16 +22,26 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Household Tasks sensors from a config entry."""
-    coordinator: HouseholdTasksCoordinator = hass.data[DOMAIN][entry.entry_id]
+    _LOGGER.info("Setting up Simple Chores sensors...")
+    
+    try:
+        coordinator: HouseholdTasksCoordinator = hass.data[DOMAIN][entry.entry_id]
+        _LOGGER.info("Got coordinator: %s", coordinator)
+        _LOGGER.info("Coordinator data: %s", coordinator.data)
 
-    entities: list[SensorEntity] = [
-        HouseholdTasksDueTodaySensor(coordinator, entry),
-        HouseholdTasksDueThisWeekSensor(coordinator, entry),
-        HouseholdTasksOverdueSensor(coordinator, entry),
-        HouseholdTasksTotalSensor(coordinator, entry),
-    ]
+        entities: list[SensorEntity] = [
+            HouseholdTasksDueTodaySensor(coordinator, entry),
+            HouseholdTasksDueThisWeekSensor(coordinator, entry),
+            HouseholdTasksOverdueSensor(coordinator, entry),
+            HouseholdTasksTotalSensor(coordinator, entry),
+        ]
 
-    async_add_entities(entities)
+        _LOGGER.info("Created %d sensor entities", len(entities))
+        async_add_entities(entities)
+        _LOGGER.info("Simple Chores sensors setup complete!")
+        
+    except Exception as e:
+        _LOGGER.error("Failed to setup Simple Chores sensors: %s", e, exc_info=True)
 
 
 class HouseholdTasksBaseSensor(CoordinatorEntity[HouseholdTasksCoordinator], SensorEntity):
