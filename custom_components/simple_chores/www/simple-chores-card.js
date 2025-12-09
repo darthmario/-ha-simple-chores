@@ -238,6 +238,15 @@ class SimpleChoresCard extends LitElement {
     // Check if calendar has any room data
     const calendar = this.hass.states["calendar.household_tasks"];
     console.log("Simple Chores Card: Calendar entity:", calendar);
+    if (calendar && calendar.attributes) {
+      console.log("Simple Chores Card: Calendar attributes:", calendar.attributes);
+      
+      // Check if calendar has room data in attributes
+      if (calendar.attributes.rooms) {
+        console.log("Simple Chores Card: Found rooms in calendar:", calendar.attributes.rooms);
+        return calendar.attributes.rooms;
+      }
+    }
     
     const allSensors = [...simpleChoreSensors, ...householdTaskSensors];
     
