@@ -25,9 +25,18 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Household Tasks binary sensors from a config entry."""
-    coordinator: HouseholdTasksCoordinator = hass.data[DOMAIN][entry.entry_id]
+    _LOGGER.info("Setting up Simple Chores binary sensors...")
+    
+    try:
+        coordinator: HouseholdTasksCoordinator = hass.data[DOMAIN][entry.entry_id]
+        _LOGGER.info("Got coordinator for binary sensor: %s", coordinator)
 
-    async_add_entities([HouseholdTasksHasOverdueSensor(coordinator, entry)])
+        entities = [HouseholdTasksHasOverdueSensor(coordinator, entry)]
+        async_add_entities(entities)
+        _LOGGER.info("Simple Chores binary sensors setup complete!")
+        
+    except Exception as e:
+        _LOGGER.error("Failed to setup Simple Chores binary sensors: %s", e, exc_info=True)
 
 
 class HouseholdTasksHasOverdueSensor(
