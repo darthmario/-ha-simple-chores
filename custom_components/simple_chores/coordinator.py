@@ -81,6 +81,7 @@ class HouseholdTasksCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Get all rooms (HA Areas + custom)
         all_rooms = await self._get_all_rooms()
+        _LOGGER.debug("Available rooms: %s", [(room["id"], room["name"]) for room in all_rooms])
 
         # Categorize chores
         due_today: list[dict[str, Any]] = []
@@ -90,10 +91,15 @@ class HouseholdTasksCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         for chore in self.store.chores.values():
             next_due = date.fromisoformat(chore["next_due"])
+            room_name = self._get_room_name(chore["room_id"], all_rooms)
             chore_with_room = {
                 **chore,
-                "room_name": self._get_room_name(chore["room_id"], all_rooms),
+                "room_name": room_name,
             }
+            
+            # Debug logging for troubleshooting
+            _LOGGER.debug("Chore: %s, Room ID: %s, Room Name: %s, Next Due: %s", 
+                         chore["name"], chore["room_id"], room_name, chore["next_due"])
 
             # Categorize by due date
             if next_due < today:

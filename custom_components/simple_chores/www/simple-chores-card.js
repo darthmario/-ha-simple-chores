@@ -177,6 +177,7 @@ class SimpleChoresCard extends LitElement {
   }
 
   _renderChore(chore) {
+    console.debug("Simple Chores Card: Rendering chore:", chore);
     const isOverdue = new Date(chore.next_due) < new Date().setHours(0,0,0,0);
     
     return html`
@@ -304,7 +305,24 @@ class SimpleChoresCard extends LitElement {
   }
 
   _formatDate(dateStr) {
-    const date = new Date(dateStr);
+    if (!dateStr) return "No Date";
+    
+    // Handle ISO date format (YYYY-MM-DD)
+    let date;
+    if (typeof dateStr === 'string' && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      // ISO date string, create date in local timezone
+      const parts = dateStr.split('-');
+      date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    } else {
+      date = new Date(dateStr);
+    }
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      console.warn("Simple Chores Card: Invalid date:", dateStr);
+      return "Invalid Date";
+    }
+    
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
