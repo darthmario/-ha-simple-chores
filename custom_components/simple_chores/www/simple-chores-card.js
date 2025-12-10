@@ -52,10 +52,12 @@ class SimpleChoresCard extends LitElement {
       _showAddRoomModal: { type: Boolean },
       _newRoomName: { type: String },
       _newRoomIcon: { type: String },
+      _showManageRoomsModal: { type: Boolean },
       _showAddChoreModal: { type: Boolean },
       _newChoreName: { type: String },
       _newChoreRoom: { type: String },
       _newChoreFrequency: { type: String },
+      _newChoreDueDate: { type: String },
     };
   }
 
@@ -65,10 +67,12 @@ class SimpleChoresCard extends LitElement {
     this._showAddRoomModal = false;
     this._newRoomName = "";
     this._newRoomIcon = "";
+    this._showManageRoomsModal = false;
     this._showAddChoreModal = false;
     this._newChoreName = "";
     this._newChoreRoom = "";
     this._newChoreFrequency = "daily";
+    this._newChoreDueDate = "";
   }
 
   static getStubConfig() {
@@ -118,6 +122,9 @@ class SimpleChoresCard extends LitElement {
             <button class="add-room-btn" @click=${this._openAddRoomModal} title="Add Custom Room">
               <ha-icon icon="mdi:home-plus"></ha-icon>
             </button>
+            <button class="manage-rooms-btn" @click=${this._openManageRoomsModal} title="Manage Rooms">
+              <ha-icon icon="mdi:cog"></ha-icon>
+            </button>
             <button class="add-chore-btn" @click=${this._openAddChoreModal} title="Add New Chore">
               <ha-icon icon="mdi:playlist-plus"></ha-icon>
             </button>
@@ -131,6 +138,7 @@ class SimpleChoresCard extends LitElement {
         </div>
         
         ${this._renderAddRoomModal()}
+        ${this._renderManageRoomsModal()}
         ${this._renderAddChoreModal()}
       </ha-card>
     `;
@@ -502,6 +510,80 @@ class SimpleChoresCard extends LitElement {
             <button class="submit-btn" @click=${this._submitAddRoom} ?disabled=${!this._newRoomName.trim()}>
               Create Room
             </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  _openManageRoomsModal() {
+    this._showManageRoomsModal = true;
+  }
+
+  _closeManageRoomsModal() {
+    this._showManageRoomsModal = false;
+  }
+
+  async _deleteRoom(roomId, roomName) {
+    if (!confirm(`Are you sure you want to delete the room "${roomName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await this.hass.callService("simple_chores", "remove_room", {
+        room_id: roomId
+      });
+      
+      this._showToast(`Room "${roomName}" deleted successfully!`);
+      this.requestUpdate();
+    } catch (error) {
+      console.error("Simple Chores Card: Failed to delete room:", error);
+      this._showToast(`Error deleting room: ${error.message}`);
+    }
+  }
+
+  _renderManageRoomsModal() {
+    if (!this._showManageRoomsModal) {
+      return html``;
+    }
+
+    const rooms = this._getRooms();
+    const customRooms = rooms.filter(room => room.is_custom);
+
+    return html`
+      <div class="modal-overlay" @click=${this._closeManageRoomsModal}>
+        <div class="modal-content" @click=${(e) => e.stopPropagation()}>
+          <div class="modal-header">
+            <h3>Manage Custom Rooms</h3>
+            <button class="close-btn" @click=${this._closeManageRoomsModal}>
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>
+          <div class="modal-body">
+            ${customRooms.length === 0 ? html`
+              <p class="no-custom-rooms">No custom rooms found. Use the + button to add rooms.</p>
+            ` : html`
+              <div class="room-list">
+                ${customRooms.map(room => html`
+                  <div class="room-item">
+                    <div class="room-info">
+                      <ha-icon icon="${room.icon || 'mdi:home'}"></ha-icon>
+                      <span class="room-name">${room.name}</span>
+                    </div>
+                    <button 
+                      class="delete-room-btn" 
+                      @click=${() => this._deleteRoom(room.id, room.name)}
+                      title="Delete Room"
+                    >
+                      <ha-icon icon="mdi:delete"></ha-icon>
+                    </button>
+                  </div>
+                `)}
+              </div>
+            `}
+          </div>
+          <div class="modal-footer">
+            <button class="cancel-btn" @click=${this._closeManageRoomsModal}>Close</button>
           </div>
         </div>
       </div>
