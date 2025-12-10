@@ -21,27 +21,17 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Household Tasks sensors from a config entry."""
-    _LOGGER.info("Setting up Simple Chores sensors...")
-    
-    try:
-        coordinator: HouseholdTasksCoordinator = hass.data[DOMAIN][entry.entry_id]
-        _LOGGER.info("Got coordinator: %s", coordinator)
-        _LOGGER.info("Coordinator data: %s", coordinator.data)
+    """Set up Simple Chores sensors from a config entry."""
+    coordinator: HouseholdTasksCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-        entities: list[SensorEntity] = [
-            HouseholdTasksDueTodaySensor(coordinator, entry),
-            HouseholdTasksDueThisWeekSensor(coordinator, entry),
-            HouseholdTasksOverdueSensor(coordinator, entry),
-            HouseholdTasksTotalSensor(coordinator, entry),
-        ]
+    entities: list[SensorEntity] = [
+        HouseholdTasksDueTodaySensor(coordinator, entry),
+        HouseholdTasksDueThisWeekSensor(coordinator, entry),
+        HouseholdTasksOverdueSensor(coordinator, entry),
+        HouseholdTasksTotalSensor(coordinator, entry),
+    ]
 
-        _LOGGER.info("Created %d sensor entities", len(entities))
-        async_add_entities(entities)
-        _LOGGER.info("Simple Chores sensors setup complete!")
-        
-    except Exception as e:
-        _LOGGER.error("Failed to setup Simple Chores sensors: %s", e, exc_info=True)
+    async_add_entities(entities)
 
 
 class HouseholdTasksBaseSensor(CoordinatorEntity[HouseholdTasksCoordinator], SensorEntity):
@@ -213,11 +203,8 @@ class HouseholdTasksTotalSensor(HouseholdTasksBaseSensor):
     def native_value(self) -> int:
         """Return the total number of chores."""
         if self.coordinator.data is None:
-            _LOGGER.error("SIMPLE CHORES: Total sensor - coordinator.data is None!")
             return 0
-        value = self.coordinator.data.get("total_chores", 0)
-        _LOGGER.error("SIMPLE CHORES: Total sensor returning value: %s", value)
-        return value
+        return self.coordinator.data.get("total_chores", 0)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

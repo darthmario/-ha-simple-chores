@@ -23,19 +23,10 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Household Tasks calendar from a config entry."""
-    _LOGGER.info("Setting up Simple Chores calendar...")
-    
-    try:
-        coordinator: HouseholdTasksCoordinator = hass.data[DOMAIN][entry.entry_id]
-        _LOGGER.info("Got coordinator for calendar: %s", coordinator)
+    """Set up Simple Chores calendar from a config entry."""
+    coordinator: HouseholdTasksCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-        entities = [HouseholdTasksCalendar(coordinator, entry)]
-        async_add_entities(entities)
-        _LOGGER.info("Simple Chores calendar setup complete!")
-        
-    except Exception as e:
-        _LOGGER.error("Failed to setup Simple Chores calendar: %s", e, exc_info=True)
+    async_add_entities([HouseholdTasksCalendar(coordinator, entry)])
 
 
 class HouseholdTasksCalendar(

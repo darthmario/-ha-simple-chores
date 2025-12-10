@@ -119,30 +119,23 @@ SERVICE_GET_HISTORY_SCHEMA = vol.Schema(
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Household Tasks from a config entry."""
-    _LOGGER.error("SIMPLE CHORES: Integration setup starting - THIS SHOULD ALWAYS APPEAR!")
+    """Set up Simple Chores from a config entry."""
     _LOGGER.info("Setting up Simple Chores integration...")
     hass.data.setdefault(DOMAIN, {})
 
     try:
         # Initialize store and load data
-        _LOGGER.info("Initializing store...")
         store = HouseholdTasksStore(hass)
         await store.async_load()
-        _LOGGER.info("Store loaded with data: %s", store._data.keys())
 
         # Create coordinator
-        _LOGGER.info("Creating coordinator...")
         coordinator = HouseholdTasksCoordinator(hass, store, entry)
         await coordinator.async_config_entry_first_refresh()
-        _LOGGER.info("Coordinator created and refreshed")
 
         hass.data[DOMAIN][entry.entry_id] = coordinator
 
         # Set up platforms
-        _LOGGER.info("Setting up platforms: %s", PLATFORMS)
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-        _LOGGER.info("Platforms setup completed")
     except Exception as e:
         _LOGGER.error("Failed to setup Simple Chores integration: %s", e, exc_info=True)
         return False
