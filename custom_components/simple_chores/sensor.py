@@ -211,9 +211,29 @@ class HouseholdTasksTotalSensor(HouseholdTasksBaseSensor):
         """Return additional state attributes."""
         if self.coordinator.data is None:
             return {}
+        
+        # Get all chores from the coordinator data
+        all_chores = self.coordinator.data.get("chores", [])
+        
         return {
+            "chores": [
+                {
+                    "id": c["id"],
+                    "name": c["name"],
+                    "room_id": c.get("room_id"),
+                    "room_name": c.get("room_name", "Unknown"),
+                    "frequency": c["frequency"],
+                    "next_due": c["next_due"],
+                    "last_completed": c.get("last_completed"),
+                    "last_completed_by": c.get("last_completed_by"),
+                    "created_at": c.get("created_at"),
+                }
+                for c in all_chores
+            ],
+            "total_count": len(all_chores),
             "rooms": [
                 {"id": r["id"], "name": r["name"], "is_custom": r.get("is_custom", False)}
                 for r in self.coordinator.data.get("rooms", [])
             ],
         }
+

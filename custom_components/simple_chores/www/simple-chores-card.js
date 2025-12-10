@@ -1023,68 +1023,23 @@ class SimpleChoresCard extends LitElement {
   }
 
   _getAllChores() {
-    // Try multiple data sources to get ALL chores
-    const allChores = new Map();
+    // Use the enhanced total_chores sensor which now includes all chore data
+    const totalChoresSensor = this.hass.states["sensor.total_chores"];
     
-    // Method 1: Look for coordinator data with all chores
-    const entities = Object.keys(this.hass.states);
-    entities.forEach(entityId => {
-      const entity = this.hass.states[entityId];
-      if (entity && entity.attributes) {
-        // Check for chores attribute (coordinator might store all chores here)
-        if (entity.attributes.chores && Array.isArray(entity.attributes.chores)) {
-          entity.attributes.chores.forEach(chore => {
-            allChores.set(chore.id, chore);
-          });
-        }
-        
-        // Check for individual chore data in any entity
-        if (entity.attributes.chore_id && entity.attributes.name) {
-          const chore = {
-            id: entity.attributes.chore_id,
-            name: entity.attributes.name,
-            room_id: entity.attributes.room_id,
-            room_name: entity.attributes.room_name,
-            next_due: entity.attributes.next_due,
-            frequency: entity.attributes.frequency,
-            last_completed: entity.attributes.last_completed,
-            last_completed_by: entity.attributes.last_completed_by
-          };
-          allChores.set(chore.id, chore);
-        }
-      }
-    });
-    
-    // Method 2: Get chores from sensor entities if available
-    entities.filter(id => id.includes('chore')).forEach(entityId => {
-      const entity = this.hass.states[entityId];
-      if (entity && entity.attributes && entity.attributes.name) {
-        const chore = {
-          id: entity.attributes.chore_id || entityId.split('.')[1],
-          name: entity.attributes.name,
-          room_id: entity.attributes.room_id,
-          room_name: entity.attributes.room_name,
-          next_due: entity.attributes.next_due,
-          frequency: entity.attributes.frequency,
-          last_completed: entity.attributes.last_completed,
-          last_completed_by: entity.attributes.last_completed_by
-        };
-        allChores.set(chore.id, chore);
-      }
-    });
-    
-    // Method 3: Fallback to due today/week data if nothing else found
-    if (allChores.size === 0) {
-      const dueToday = this._getDueChores("today");
-      const dueThisWeek = this._getDueChores("week");
-      
-      [...dueToday, ...dueThisWeek].forEach(chore => {
-        allChores.set(chore.id, chore);
-      });
+    if (totalChoresSensor && totalChoresSensor.attributes && totalChoresSensor.attributes.chores) {
+      console.log("Simple Chores Card: Found all chores in sensor.total_chores:", totalChoresSensor.attributes.chores);
+      return totalChoresSensor.attributes.chores;
     }
     
-    console.log("Simple Chores Card: Found", allChores.size, "chores total");
-    return Array.from(allChores.values());
+    // Fallback: try the due chores if the sensor isn't available yet
+    console.log("Simple Chores Card: sensor.total_chores not available, using fallback...");
+    const dueToday = this._getDueChores("today");
+    const dueThisWeek = this._getDueChores("week");
+    
+    const fallbackChores = [...dueToday, ...dueThisWeek];
+    console.log("Simple Chores Card: Using fallback chores:", fallbackChores.length);
+    
+    return fallbackChores;
   }
 
   _renderAllChoresModal() {
