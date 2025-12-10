@@ -64,6 +64,7 @@ class SimpleChoresCard extends LitElement {
       _editChoreRoom: { type: String },
       _editChoreFrequency: { type: String },
       _editChoreDueDate: { type: String },
+      _showAllChoresModal: { type: Boolean },
     };
   }
 
@@ -85,6 +86,7 @@ class SimpleChoresCard extends LitElement {
     this._editChoreRoom = "";
     this._editChoreFrequency = "daily";
     this._editChoreDueDate = "";
+    this._showAllChoresModal = false;
   }
 
   static getStubConfig() {
@@ -119,7 +121,7 @@ class SimpleChoresCard extends LitElement {
     return html`
       <ha-card>
         <div class="card-header">
-          <div class="name">Simple Chores</div>
+          <div class="card-title">Simple Chores</div>
           <div class="header-controls">
             <div class="room-selector">
               <select @change=${this._roomChanged}>
@@ -153,6 +155,7 @@ class SimpleChoresCard extends LitElement {
         ${this._renderManageRoomsModal()}
         ${this._renderAddChoreModal()}
         ${this._renderEditChoreModal()}
+        ${this._renderAllChoresModal()}
       </ha-card>
     `;
   }
@@ -172,9 +175,9 @@ class SimpleChoresCard extends LitElement {
           <span class="stat-value">${overdue}</span>
           <span class="stat-label">Overdue</span>
         </div>
-        <div class="stat">
+        <div class="stat clickable" @click=${this._openAllChoresModal} title="View and manage all active chores">
           <span class="stat-value">${total}</span>
-          <span class="stat-label">Total Chores</span>
+          <span class="stat-label">Active Chores</span>
         </div>
       </div>
     `;
@@ -197,6 +200,34 @@ class SimpleChoresCard extends LitElement {
     `;
   }
 
+  _formatDate(dateString) {
+    if (!dateString) return "No Date";
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "Invalid Date";
+      
+      const today = new Date();
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      // Reset time parts for comparison
+      const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const tomorrowDate = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate());
+      
+      if (targetDate.getTime() === todayDate.getTime()) {
+        return "Today";
+      } else if (targetDate.getTime() === tomorrowDate.getTime()) {
+        return "Tomorrow";
+      } else {
+        return date.toLocaleDateString();
+      }
+    } catch (e) {
+      return "Invalid Date";
+    }
+  }
+
   _renderChore(chore) {
     console.debug("Simple Chores Card: Rendering chore:", chore);
     
@@ -209,7 +240,9 @@ class SimpleChoresCard extends LitElement {
       <div class="chore-item ${isOverdue ? 'overdue' : ''}">
         <div class="chore-info">
           <span class="chore-name">${chore.name}</span>
+          <span class="chore-separator">•</span>
           <span class="chore-room">${roomName}</span>
+          <span class="chore-separator">•</span>
           <span class="chore-due">Due: ${this._formatDate(dueDate)}</span>
         </div>
         <div class="chore-actions">
@@ -766,8 +799,9 @@ class SimpleChoresCard extends LitElement {
   }
 
   _editChore(chore) {
+    console.debug("Simple Chores Card: Editing chore:", chore);
+    
     // Open edit modal with chore data
-    this._showEditChoreModal = true;
     this._editChoreId = chore.id;
     this._editChoreName = chore.name;
     
@@ -777,6 +811,22 @@ class SimpleChoresCard extends LitElement {
     
     // Handle different property names for due date
     this._editChoreDueDate = chore.next_due || chore.due_date || "";
+    
+    console.debug("Simple Chores Card: Set edit room to:", this._editChoreRoom);
+    console.debug("Simple Chores Card: Set edit due date to:", this._editChoreDueDate);
+    
+    // Force a re-render with the new data before showing the modal
+    this.requestUpdate().then(() => {
+      this._showEditChoreModal = true;
+      // Try to force update the select element after modal is shown
+      setTimeout(() => {
+        const roomSelect = this.shadowRoot?.querySelector('#edit-chore-room');
+        if (roomSelect) {
+          roomSelect.value = this._editChoreRoom;
+          console.debug("Simple Chores Card: Manually set room select value:", roomSelect.value);
+        }
+      }, 100);
+    });
   }
 
   _closeEditChoreModal() {
@@ -933,6 +983,138 @@ class SimpleChoresCard extends LitElement {
     }
   }
 
+  _openAllChoresModal() {
+    this._showAllChoresModal = true;
+  }
+
+  _closeAllChoresModal() {
+    this._showAllChoresModal = false;
+  }
+
+  _getAllChores() {
+    // Get all chores from coordinator data
+    const coordinatorEntity = this.hass.states[`sensor.simple_chores_coordinator`];
+    if (coordinatorEntity && coordinatorEntity.attributes && coordinatorEntity.attributes.chores) {
+      return coordinatorEntity.attributes.chores;
+    }
+    
+    // Fallback: collect chores from due today and due this week, plus get all from rooms
+    const dueToday = this._getDueChores("today");
+    const dueThisWeek = this._getDueChores("week");
+    const rooms = this._getRooms();
+    
+    // Get all chores from room data
+    const allChores = new Map();
+    
+    // Add chores that are due
+    [...dueToday, ...dueThisWeek].forEach(chore => {
+      allChores.set(chore.id, chore);
+    });
+    
+    // Try to get more chores from entity attributes if available
+    rooms.forEach(room => {
+      const roomEntity = this.hass.states[`sensor.chores_${room.id}`];
+      if (roomEntity && roomEntity.attributes && roomEntity.attributes.chores) {
+        roomEntity.attributes.chores.forEach(chore => {
+          allChores.set(chore.id, chore);
+        });
+      }
+    });
+    
+    return Array.from(allChores.values());
+  }
+
+  _renderAllChoresModal() {
+    if (!this._showAllChoresModal) {
+      return html``;
+    }
+
+    const allChores = this._getAllChores();
+    const rooms = this._getRooms();
+
+    return html`
+      <div class="modal-overlay" @click=${this._closeAllChoresModal}>
+        <div class="modal-content large-modal" @click=${(e) => e.stopPropagation()}>
+          <div class="modal-header">
+            <h3>All Active Chores (${allChores.length})</h3>
+            <button class="close-btn" @click=${this._closeAllChoresModal}>
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>
+          <div class="modal-body">
+            ${allChores.length === 0 ? html`
+              <div class="no-chores">
+                <p>No active chores found.</p>
+                <p>Create your first chore using the + button in the header!</p>
+              </div>
+            ` : html`
+              <div class="all-chores-list">
+                ${allChores.map(chore => {
+                  const dueDate = chore.next_due || chore.due_date;
+                  const roomName = chore.room_name || chore.room || this._getRoomName(chore.room_id || chore.room, rooms) || 'Unknown Room';
+                  const isOverdue = new Date(dueDate) < new Date().setHours(0,0,0,0);
+                  
+                  return html`
+                    <div class="chore-item ${isOverdue ? 'overdue' : ''}">
+                      <div class="chore-info">
+                        <span class="chore-name">${chore.name}</span>
+                        <span class="chore-separator">•</span>
+                        <span class="chore-room">${roomName}</span>
+                        <span class="chore-separator">•</span>
+                        <span class="chore-due">Due: ${this._formatDate(dueDate)}</span>
+                        <span class="chore-separator">•</span>
+                        <span class="chore-frequency">${chore.frequency || 'Unknown'}</span>
+                      </div>
+                      <div class="chore-actions">
+                        <mwc-button 
+                          @click=${() => this._editChore(chore)}
+                          outlined
+                          class="edit-btn"
+                          title="Edit Chore"
+                        >
+                          ✏️ Edit
+                        </mwc-button>
+                        <mwc-button 
+                          @click=${() => this._deleteChore(chore.id, chore.name)}
+                          outlined
+                          class="delete-btn"
+                          title="Delete Chore"
+                        >
+                          🗑️ Delete
+                        </mwc-button>
+                        <mwc-button 
+                          @click=${() => this._completeChore(chore.id)}
+                          class="complete-btn"
+                        >
+                          ✓ Complete
+                        </mwc-button>
+                        <mwc-button 
+                          @click=${() => this._skipChore(chore.id)} 
+                          outlined
+                          class="skip-btn"
+                        >
+                          ⏭ Skip
+                        </mwc-button>
+                      </div>
+                    </div>
+                  `;
+                })}
+              </div>
+            `}
+          </div>
+          <div class="modal-footer">
+            <button class="submit-btn" @click=${this._closeAllChoresModal}>Close</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  _getRoomName(roomId, rooms) {
+    const room = rooms.find(r => r.id === roomId);
+    return room ? room.name : 'Unknown Room';
+  }
+
   static get styles() {
     return css`
       :host {
@@ -940,22 +1122,28 @@ class SimpleChoresCard extends LitElement {
       }
       
       .card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
         padding: 16px;
         border-bottom: 1px solid var(--divider-color);
         background: var(--primary-color);
         color: var(--text-primary-color);
       }
       
+      .card-title {
+        font-size: 1.4em;
+        font-weight: 500;
+        margin-bottom: 12px;
+        text-align: center;
+      }
+      
       .header-controls {
         display: flex;
         align-items: center;
+        justify-content: center;
         gap: 12px;
+        flex-wrap: wrap;
       }
       
-      .add-room-btn, .add-chore-btn {
+      .add-room-btn, .add-chore-btn, .manage-rooms-btn {
         background: rgba(255, 255, 255, 0.2);
         border: none;
         border-radius: 50%;
@@ -969,14 +1157,10 @@ class SimpleChoresCard extends LitElement {
         transition: background-color 0.2s;
       }
       
-      .add-room-btn:hover, .add-chore-btn:hover {
+      .add-room-btn:hover, .add-chore-btn:hover, .manage-rooms-btn:hover {
         background: rgba(255, 255, 255, 0.3);
       }
       
-      .name {
-        font-size: 1.2em;
-        font-weight: 500;
-      }
       
       .room-selector select {
         padding: 8px 12px;
@@ -1039,6 +1223,19 @@ class SimpleChoresCard extends LitElement {
         margin-top: 4px;
       }
       
+      .stat.clickable {
+        cursor: pointer;
+        border: 2px solid var(--primary-color);
+        background: rgba(var(--primary-color-rgb), 0.1);
+      }
+      
+      .stat.clickable:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border-color: var(--primary-color);
+        background: rgba(var(--primary-color-rgb), 0.15);
+      }
+      
       .section {
         margin-bottom: 24px;
       }
@@ -1060,13 +1257,13 @@ class SimpleChoresCard extends LitElement {
       
       .chore-item {
         display: flex;
-        justify-content: space-between;
-        align-items: center;
+        flex-direction: column;
         padding: 16px;
         background: var(--card-background-color);
         border: 1px solid var(--divider-color);
         border-radius: 8px;
         transition: all 0.2s ease;
+        gap: 12px;
       }
       
       .chore-item:hover {
@@ -1081,9 +1278,9 @@ class SimpleChoresCard extends LitElement {
       
       .chore-info {
         display: flex;
-        flex-direction: column;
-        flex: 1;
-        gap: 4px;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
       }
       
       .chore-name {
@@ -1092,13 +1289,18 @@ class SimpleChoresCard extends LitElement {
         font-size: 1.1em;
       }
       
+      .chore-separator {
+        color: var(--secondary-text-color);
+        font-weight: bold;
+      }
+      
       .chore-room {
         font-size: 0.9em;
         color: var(--secondary-text-color);
       }
       
       .chore-due {
-        font-size: 0.85em;
+        font-size: 0.9em;
         color: var(--accent-color);
         font-weight: 500;
       }
@@ -1110,7 +1312,8 @@ class SimpleChoresCard extends LitElement {
       .chore-actions {
         display: flex;
         gap: 8px;
-        flex-shrink: 0;
+        flex-wrap: wrap;
+        justify-content: flex-start;
       }
       
       .chore-actions mwc-button {
@@ -1159,6 +1362,20 @@ class SimpleChoresCard extends LitElement {
         max-height: 80vh;
         overflow: auto;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      }
+      
+      .modal-content.large-modal {
+        max-width: 800px;
+        width: 90%;
+        max-height: 90vh;
+      }
+      
+      .all-chores-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        max-height: 60vh;
+        overflow-y: auto;
       }
       
       .modal-header {
