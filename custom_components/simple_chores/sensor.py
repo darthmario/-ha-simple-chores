@@ -231,6 +231,7 @@ class HouseholdTasksTotalSensor(HouseholdTasksBaseSensor):
                 for c in all_chores
             ],
             "total_count": len(all_chores),
+            "completion_history": self.coordinator.store.history,
             "rooms": [
                 {"id": r["id"], "name": r["name"], "is_custom": r.get("is_custom", False)}
                 for r in self.coordinator.data.get("rooms", [])

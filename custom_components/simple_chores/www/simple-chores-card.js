@@ -237,9 +237,21 @@ class SimpleChoresCard extends LitElement {
   _renderChore(chore) {
     console.debug("Simple Chores Card: Rendering chore:", chore);
     
-    // Handle different property names from sensor attributes vs coordinator data
-    const dueDate = chore.next_due || chore.due_date;
-    const roomName = chore.room_name || chore.room || 'Unknown Room';
+    // Handle different property names from different data sources
+    const dueDate = chore.next_due || chore.due_date || chore.date;
+    
+    // For room name, try multiple property names in order
+    let roomName = chore.room_name || chore.room || 'Unknown Room';
+    
+    // If we have room_id but no room_name, try to resolve it from rooms data
+    if ((!chore.room_name || chore.room_name === 'Unknown') && chore.room_id) {
+      const rooms = this._getRooms();
+      const matchingRoom = rooms.find(r => r.id === chore.room_id || r.name === chore.room_id);
+      if (matchingRoom) {
+        roomName = matchingRoom.name;
+      }
+    }
+    
     const isOverdue = new Date(dueDate) < new Date().setHours(0,0,0,0);
     
     return html`
@@ -252,35 +264,32 @@ class SimpleChoresCard extends LitElement {
           <span class="chore-due">Due: ${this._formatDate(dueDate)}</span>
         </div>
         <div class="chore-actions">
-          <mwc-button 
+          <button 
             @click=${() => this._editChore(chore)}
-            outlined
-            class="edit-btn"
+            class="action-btn edit-btn"
             title="Edit Chore"
           >
             ✏️ Edit
-          </mwc-button>
-          <mwc-button 
+          </button>
+          <button 
             @click=${() => this._deleteChore(chore.id, chore.name)}
-            outlined
-            class="delete-btn"
+            class="action-btn delete-btn"
             title="Delete Chore"
           >
             🗑️ Delete
-          </mwc-button>
-          <mwc-button 
+          </button>
+          <button 
             @click=${() => this._completeChore(chore.id)}
-            class="complete-btn"
+            class="action-btn complete-btn"
           >
             ✓ Complete
-          </mwc-button>
-          <mwc-button 
+          </button>
+          <button 
             @click=${() => this._skipChore(chore.id)} 
-            outlined
-            class="skip-btn"
+            class="action-btn skip-btn"
           >
             ⏭ Skip
-          </mwc-button>
+          </button>
         </div>
       </div>
     `;
@@ -306,14 +315,20 @@ class SimpleChoresCard extends LitElement {
         id: chore.id || chore.chore_id,
         name: chore.name || chore.chore_name,
         room_id: chore.room_id || chore.room,
-        room_name: chore.room_name || chore.room_name,
-        next_due: chore.next_due || chore.due_date || chore.date,
-        due_date: chore.next_due || chore.due_date || chore.date,
+        room_name: chore.room_name || chore.room, // Use room as fallback for room_name
+        next_due: chore.next_due || chore.due_date || chore.date || new Date().toISOString().split('T')[0],
+        due_date: chore.next_due || chore.due_date || chore.date || new Date().toISOString().split('T')[0],
         frequency: chore.frequency
       };
       
+      // If this chore is in "due today", and we don't have a specific date, assume today
+      if (sensorName === "sensor.chores_due_today" && !processedChore.next_due) {
+        processedChore.next_due = new Date().toISOString().split('T')[0];
+        processedChore.due_date = new Date().toISOString().split('T')[0];
+      }
+      
       // Debug log for each chore
-      console.log(`Simple Chores Card: Processed chore:`, processedChore);
+      console.log(`Simple Chores Card: Processed chore from ${sensorName}:`, processedChore);
       
       return processedChore;
     });
@@ -1133,8 +1148,28 @@ class SimpleChoresCard extends LitElement {
   // Modal action methods that close the all chores modal before performing actions
   _editChoreFromModal(chore) {
     console.log("Simple Chores Card: Edit chore from modal:", chore);
+    
+    // First populate the edit modal data
+    this._editChoreId = chore.id;
+    this._editChoreName = chore.name;
+    
+    // Handle different property names for room_id
+    this._editChoreRoom = chore.room_id || chore.room || "";
+    this._editChoreFrequency = chore.frequency || "daily";
+    
+    // Handle different property names for due date
+    this._editChoreDueDate = chore.next_due || chore.due_date || "";
+    
+    console.log("Simple Chores Card: Set edit data - room:", this._editChoreRoom, "due:", this._editChoreDueDate);
+    
+    // Close all chores modal and open edit modal
     this._closeAllChoresModal();
-    this._editChore(chore);
+    
+    // Use setTimeout to ensure the close happens first
+    setTimeout(() => {
+      this._showEditChoreModal = true;
+      this.requestUpdate();
+    }, 50);
   }
 
   async _deleteChoreFromModal(choreId, choreName) {
@@ -1162,43 +1197,19 @@ class SimpleChoresCard extends LitElement {
 
   async _getCompletionHistory() {
     try {
-      // Call the get_user_stats service to get completion data
-      const userStatsResult = await this.hass.callService("simple_chores", "get_user_stats");
+      // Get completion history from the total_chores sensor
+      const totalChoresSensor = this.hass.states["sensor.simple_chores_total"];
       
-      // Try to get history from entity attributes if available
-      const entities = Object.keys(this.hass.states);
-      let history = [];
-      
-      // Look for any entity that might contain completion history
-      for (const entityId of entities) {
-        const entity = this.hass.states[entityId];
-        if (entity && entity.attributes && entity.attributes.completion_history) {
-          history = entity.attributes.completion_history;
-          break;
-        }
+      if (totalChoresSensor && totalChoresSensor.attributes && totalChoresSensor.attributes.completion_history) {
+        const history = totalChoresSensor.attributes.completion_history;
+        console.log("Simple Chores Card: Found completion history:", history);
+        
+        // Sort by completion date (newest first)
+        return history.sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
       }
       
-      // Fallback: try to construct from available data
-      if (history.length === 0) {
-        // Get all entities and check their attributes for completion data
-        for (const entityId of entities) {
-          const entity = this.hass.states[entityId];
-          if (entityId.startsWith('sensor.') && entity.attributes) {
-            if (entity.attributes.last_completed) {
-              // This entity has completion info
-              const completionEntry = {
-                chore_name: entity.attributes.friendly_name || entityId,
-                completed_at: entity.attributes.last_completed,
-                completed_by_name: entity.attributes.last_completed_by || 'Unknown User'
-              };
-              history.push(completionEntry);
-            }
-          }
-        }
-      }
-      
-      // Sort by completion date (newest first)
-      return history.sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
+      console.log("Simple Chores Card: No completion history found in sensor.simple_chores_total");
+      return [];
       
     } catch (error) {
       console.error("Simple Chores Card: Failed to get completion history:", error);
