@@ -47,6 +47,7 @@ ATTR_CHORE_NAME: Final = "name"
 ATTR_FREQUENCY: Final = "frequency"
 ATTR_ICON: Final = "icon"
 ATTR_USER_ID: Final = "user_id"
+ATTR_ASSIGNED_TO: Final = "assigned_to"
 ATTR_START_DATE: Final = "start_date"
 ATTR_NEXT_DUE: Final = "next_due"
 

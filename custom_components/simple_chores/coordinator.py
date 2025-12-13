@@ -263,9 +263,10 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         room_id: str,
         frequency: str,
         start_date: date | None = None,
+        assigned_to: str | None = None,
     ) -> dict[str, Any]:
         """Add a new chore."""
-        chore = self.store.add_chore(name, room_id, frequency, start_date)
+        chore = self.store.add_chore(name, room_id, frequency, start_date, assigned_to)
         await self.store.async_save()
         await self.async_request_refresh()
         return chore
@@ -277,9 +278,10 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         room_id: str | None = None,
         frequency: str | None = None,
         next_due: date | None = None,
+        assigned_to: str | None = None,
     ) -> dict[str, Any] | None:
         """Update an existing chore."""
-        chore = self.store.update_chore(chore_id, name, room_id, frequency, next_due)
+        chore = self.store.update_chore(chore_id, name, room_id, frequency, next_due, assigned_to)
         if chore:
             await self.store.async_save()
             await self.async_request_refresh()

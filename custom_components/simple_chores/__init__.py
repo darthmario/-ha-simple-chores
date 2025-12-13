@@ -26,6 +26,7 @@ except ImportError:
     CachingStaticResource = None
 
 from .const import (
+    ATTR_ASSIGNED_TO,
     ATTR_CHORE_ID,
     ATTR_CHORE_NAME,
     ATTR_FREQUENCY,
@@ -93,6 +94,7 @@ SERVICE_ADD_CHORE_SCHEMA = vol.Schema(
         vol.Required(ATTR_ROOM_ID): cv.string,
         vol.Required(ATTR_FREQUENCY): vol.In(FREQUENCIES),
         vol.Optional(ATTR_START_DATE): cv.date,
+        vol.Optional(ATTR_ASSIGNED_TO): cv.string,
     }
 )
 
@@ -109,6 +111,7 @@ SERVICE_UPDATE_CHORE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_ROOM_ID): cv.string,
         vol.Optional(ATTR_FREQUENCY): vol.In(FREQUENCIES),
         vol.Optional(ATTR_NEXT_DUE): cv.date,
+        vol.Optional(ATTR_ASSIGNED_TO): cv.string,
     }
 )
 
@@ -211,7 +214,8 @@ async def _async_setup_services(
         room_id = call.data[ATTR_ROOM_ID]
         frequency = call.data[ATTR_FREQUENCY]
         start_date = call.data.get(ATTR_START_DATE)
-        await coordinator.async_add_chore(name, room_id, frequency, start_date)
+        assigned_to = call.data.get(ATTR_ASSIGNED_TO)
+        await coordinator.async_add_chore(name, room_id, frequency, start_date, assigned_to)
 
     async def handle_remove_chore(call: ServiceCall) -> None:
         """Handle remove_chore service call."""
@@ -225,7 +229,8 @@ async def _async_setup_services(
         room_id = call.data.get(ATTR_ROOM_ID)
         frequency = call.data.get(ATTR_FREQUENCY)
         next_due = call.data.get(ATTR_NEXT_DUE)
-        await coordinator.async_update_chore(chore_id, name, room_id, frequency, next_due)
+        assigned_to = call.data.get(ATTR_ASSIGNED_TO)
+        await coordinator.async_update_chore(chore_id, name, room_id, frequency, next_due, assigned_to)
 
     async def handle_complete_chore(call: ServiceCall) -> None:
         """Handle complete_chore service call."""

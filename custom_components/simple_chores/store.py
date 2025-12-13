@@ -101,6 +101,7 @@ class SimpleChoresStore:
         room_id: str,
         frequency: str,
         start_date: date | None = None,
+        assigned_to: str | None = None,
     ) -> dict[str, Any]:
         """Add a new chore."""
         # Input validation
@@ -120,6 +121,7 @@ class SimpleChoresStore:
             "name": name,
             "room_id": room_id,
             "frequency": frequency,
+            "assigned_to": assigned_to,
             "last_completed": None,
             "last_completed_by": None,
             "next_due": next_due.isoformat(),
@@ -135,6 +137,7 @@ class SimpleChoresStore:
         room_id: str | None = None,
         frequency: str | None = None,
         next_due: date | None = None,
+        assigned_to: str | None = None,
     ) -> dict[str, Any] | None:
         """Update an existing chore."""
         if chore_id not in self._data["chores"]:
@@ -148,6 +151,8 @@ class SimpleChoresStore:
             chore["frequency"] = frequency
         if next_due is not None:
             chore["next_due"] = next_due.isoformat()
+        if assigned_to is not None:
+            chore["assigned_to"] = assigned_to
         return chore
 
     def remove_chore(self, chore_id: str) -> bool:

@@ -58,12 +58,14 @@ class SimpleChoresCard extends LitElement {
       _newChoreRoom: { type: String },
       _newChoreFrequency: { type: String },
       _newChoreDueDate: { type: String },
+      _newChoreAssignedTo: { type: String },
       _showEditChoreModal: { type: Boolean },
       _editChoreId: { type: String },
       _editChoreName: { type: String },
       _editChoreRoom: { type: String },
       _editChoreFrequency: { type: String },
       _editChoreDueDate: { type: String },
+      _editChoreAssignedTo: { type: String },
       _showAllChoresModal: { type: Boolean },
       _showHistoryModal: { type: Boolean },
     };
@@ -81,12 +83,14 @@ class SimpleChoresCard extends LitElement {
     this._newChoreRoom = "";
     this._newChoreFrequency = "daily";
     this._newChoreDueDate = "";
+    this._newChoreAssignedTo = "";
     this._showEditChoreModal = false;
     this._editChoreId = "";
     this._editChoreName = "";
     this._editChoreRoom = "";
     this._editChoreFrequency = "daily";
     this._editChoreDueDate = "";
+    this._editChoreAssignedTo = "";
     this._showAllChoresModal = false;
     this._showHistoryModal = false;
   }
@@ -211,7 +215,12 @@ class SimpleChoresCard extends LitElement {
     console.debug("Simple Chores Card: Rendering chore:", chore);
     
     // Handle different property names from different data sources
-    const dueDate = chore.next_due || chore.due_date || chore.date;
+    let dueDate = chore.next_due || chore.due_date || chore.date;
+    
+    // Fix for Due Today chores - if no specific date, use today's date
+    if (!dueDate) {
+      dueDate = new Date().toISOString().split('T')[0];
+    }
     
     // For room name, try multiple property names in order
     let roomName = chore.room_name || chore.room || 'Unknown Room';
@@ -225,6 +234,15 @@ class SimpleChoresCard extends LitElement {
       }
     }
     
+    // Get assigned user info
+    const assignedTo = chore.assigned_to;
+    let assignedUserName = null;
+    if (assignedTo) {
+      const users = this._getUsers();
+      const assignedUser = users.find(u => u.id === assignedTo);
+      assignedUserName = assignedUser ? assignedUser.name : assignedTo;
+    }
+    
     const isOverdue = new Date(dueDate) < new Date().setHours(0,0,0,0);
     
     return html`
@@ -235,6 +253,10 @@ class SimpleChoresCard extends LitElement {
           <span class="chore-room">${roomName}</span>
           <span class="chore-separator">•</span>
           <span class="chore-due">Due: ${this._formatDate(dueDate)}</span>
+          ${assignedUserName ? html`
+            <span class="chore-separator">•</span>
+            <span class="chore-assigned">👤 ${assignedUserName}</span>
+          ` : ''}
         </div>
         <div class="chore-actions">
           <button 
@@ -307,6 +329,46 @@ class SimpleChoresCard extends LitElement {
     });
     
     return processedChores;
+  }
+
+  _getUsers() {
+    if (!this.hass) return [];
+    
+    // Try to get users from sensor attributes first
+    const possibleTotalSensors = [
+      "sensor.simple_chores_total",
+      "sensor.household_tasks_total",
+      "sensor.total_chores"
+    ];
+    
+    for (const sensorName of possibleTotalSensors) {
+      const sensor = this.hass.states[sensorName];
+      if (sensor && sensor.attributes && sensor.attributes.users) {
+        return sensor.attributes.users;
+      }
+    }
+    
+    // Fallback to Home Assistant users from auth registry (if available)
+    // This is a basic fallback - actual users would need to be provided by the integration
+    const users = [];
+    
+    // Check if we can get users from HA's person entities  
+    Object.keys(this.hass.states).forEach(entityId => {
+      if (entityId.startsWith('person.')) {
+        const person = this.hass.states[entityId];
+        users.push({
+          id: entityId.replace('person.', ''),
+          name: person.attributes.friendly_name || person.attributes.id || entityId.replace('person.', '')
+        });
+      }
+    });
+    
+    if (users.length > 0) return users;
+    
+    // Final fallback - basic user entries
+    return [
+      { id: 'user', name: 'Default User' }
+    ];
   }
 
   _getRooms() {
@@ -677,6 +739,7 @@ class SimpleChoresCard extends LitElement {
     this._newChoreRoom = "";
     this._newChoreFrequency = "daily";
     this._newChoreDueDate = "";
+    this._newChoreAssignedTo = "";
   }
 
   _closeAddChoreModal() {
@@ -685,6 +748,7 @@ class SimpleChoresCard extends LitElement {
     this._newChoreRoom = "";
     this._newChoreFrequency = "daily";
     this._newChoreDueDate = "";
+    this._newChoreAssignedTo = "";
   }
 
   _handleChoreNameInput(e) {
@@ -703,38 +767,10 @@ class SimpleChoresCard extends LitElement {
     this._newChoreDueDate = e.target.value;
   }
 
-  _submitAddChore() {
-    if (!this._newChoreName.trim()) {
-      this._showToast("Chore name is required");
-      return;
-    }
-
-    if (!this._newChoreRoom.trim()) {
-      this._showToast("Please select a room");
-      return;
-    }
-
-    // Prepare service call data
-    const serviceData = {
-      name: this._newChoreName.trim(),
-      room_id: this._newChoreRoom,
-      frequency: this._newChoreFrequency
-    };
-
-    // Add start_date if provided
-    if (this._newChoreDueDate.trim()) {
-      serviceData.start_date = this._newChoreDueDate.trim();
-    }
-
-    this.hass.callService("simple_chores", "add_chore", serviceData).then(() => {
-      this._showToast(`Chore "${this._newChoreName}" created successfully!`);
-      this._closeAddChoreModal();
-      // Force a refresh of the card data
-      this.requestUpdate();
-    }).catch(error => {
-      this._showToast(`Error creating chore: ${error.message}`);
-    });
+  _handleChoreAssignedToInput(e) {
+    this._newChoreAssignedTo = e.target.value;
   }
+
 
   _renderAddChoreModal() {
     if (!this._showAddChoreModal) {
@@ -804,6 +840,22 @@ class SimpleChoresCard extends LitElement {
               />
               <small>Leave empty to start today, or select a future date</small>
             </div>
+            <div class="form-group">
+              <label for="chore-assigned-to">Assigned To (optional)</label>
+              <select 
+                id="chore-assigned-to"
+                .value=${this._newChoreAssignedTo}
+                @change=${this._handleChoreAssignedToInput}
+              >
+                <option value="">No assignment (anyone can complete)</option>
+                ${this._getUsers().map(user => html`
+                  <option value=${user.id}>
+                    ${user.name}
+                  </option>
+                `)}
+              </select>
+              <small>Assign this chore to a specific person or leave unassigned</small>
+            </div>
           </div>
           <div class="modal-footer">
             <button class="cancel-btn" @click=${this._closeAddChoreModal}>Cancel</button>
@@ -831,8 +883,12 @@ class SimpleChoresCard extends LitElement {
     // Handle different property names for due date
     this._editChoreDueDate = chore.next_due || chore.due_date || "";
     
+    // Handle assigned user
+    this._editChoreAssignedTo = chore.assigned_to || "";
+    
     console.debug("Simple Chores Card: Set edit room to:", this._editChoreRoom);
     console.debug("Simple Chores Card: Set edit due date to:", this._editChoreDueDate);
+    console.debug("Simple Chores Card: Set edit assigned to:", this._editChoreAssignedTo);
     
     // Force a re-render with the new data before showing the modal
     this.requestUpdate().then(() => {
@@ -855,6 +911,7 @@ class SimpleChoresCard extends LitElement {
     this._editChoreRoom = "";
     this._editChoreFrequency = "daily";
     this._editChoreDueDate = "";
+    this._editChoreAssignedTo = "";
   }
 
   _handleEditChoreNameInput(e) {
@@ -871,6 +928,10 @@ class SimpleChoresCard extends LitElement {
 
   _handleEditChoreDueDateInput(e) {
     this._editChoreDueDate = e.target.value;
+  }
+
+  _handleEditChoreAssignedToInput(e) {
+    this._editChoreAssignedTo = e.target.value;
   }
 
   _submitEditChore() {
@@ -971,6 +1032,22 @@ class SimpleChoresCard extends LitElement {
                 @input=${this._handleEditChoreDueDateInput}
               />
             </div>
+            <div class="form-group">
+              <label for="edit-chore-assigned-to">Assigned To (optional)</label>
+              <select 
+                id="edit-chore-assigned-to"
+                .value=${this._editChoreAssignedTo}
+                @change=${this._handleEditChoreAssignedToInput}
+              >
+                <option value="">No assignment (anyone can complete)</option>
+                ${this._getUsers().map(user => html`
+                  <option value=${user.id}>
+                    ${user.name}
+                  </option>
+                `)}
+              </select>
+              <small>Assign this chore to a specific person or leave unassigned</small>
+            </div>
           </div>
           <div class="modal-footer">
             <button class="cancel-btn" @click=${this._closeEditChoreModal}>Cancel</button>
@@ -1057,7 +1134,27 @@ class SimpleChoresCard extends LitElement {
               <div class="all-chores-list">
                 ${allChores.map(chore => {
                   const dueDate = chore.next_due || chore.due_date;
-                  const roomName = chore.room_name || chore.room || this._getRoomName(chore.room_id || chore.room, rooms) || 'Unknown Room';
+                  
+                  // Use the same room lookup logic as the main card
+                  let roomName = chore.room_name || chore.room || 'Unknown Room';
+                  
+                  // If we have room_id but no room_name, try to resolve it from rooms data
+                  if ((!chore.room_name || chore.room_name === 'Unknown') && chore.room_id) {
+                    const matchingRoom = rooms.find(r => r.id === chore.room_id || r.name === chore.room_id);
+                    if (matchingRoom) {
+                      roomName = matchingRoom.name;
+                    }
+                  }
+                  
+                  // Get assigned user info
+                  const assignedTo = chore.assigned_to;
+                  let assignedUserName = null;
+                  if (assignedTo) {
+                    const users = this._getUsers();
+                    const assignedUser = users.find(u => u.id === assignedTo);
+                    assignedUserName = assignedUser ? assignedUser.name : assignedTo;
+                  }
+                  
                   const isOverdue = new Date(dueDate) < new Date().setHours(0,0,0,0);
                   
                   return html`
@@ -1070,6 +1167,10 @@ class SimpleChoresCard extends LitElement {
                         <span class="chore-due">Due: ${this._formatDate(dueDate)}</span>
                         <span class="chore-separator">•</span>
                         <span class="chore-frequency">${chore.frequency || 'Unknown'}</span>
+                        ${assignedUserName ? html`
+                          <span class="chore-separator">•</span>
+                          <span class="chore-assigned">👤 ${assignedUserName}</span>
+                        ` : ''}
                       </div>
                       <div class="chore-actions">
                         <button 
@@ -1133,16 +1234,15 @@ class SimpleChoresCard extends LitElement {
     // Handle different property names for due date
     this._editChoreDueDate = chore.next_due || chore.due_date || "";
     
-    console.log("Simple Chores Card: Set edit data - room:", this._editChoreRoom, "due:", this._editChoreDueDate);
+    // Handle assigned user
+    this._editChoreAssignedTo = chore.assigned_to || "";
     
-    // Close all chores modal and open edit modal
-    this._closeAllChoresModal();
+    console.log("Simple Chores Card: Set edit data - room:", this._editChoreRoom, "due:", this._editChoreDueDate, "assigned:", this._editChoreAssignedTo);
     
-    // Use setTimeout to ensure the close happens first
-    setTimeout(() => {
-      this._showEditChoreModal = true;
-      this.requestUpdate();
-    }, 50);
+    // Direct modal swap - close one and open the other simultaneously
+    this._showAllChoresModal = false;
+    this._showEditChoreModal = true;
+    this.requestUpdate();
   }
 
   async _deleteChoreFromModal(choreId, choreName) {
@@ -1162,6 +1262,8 @@ class SimpleChoresCard extends LitElement {
 
   _openHistoryModal() {
     this._showHistoryModal = true;
+    // Auto-load history when modal opens
+    setTimeout(() => this._loadHistory(), 100);
   }
 
   _closeHistoryModal() {
@@ -1233,8 +1335,6 @@ class SimpleChoresCard extends LitElement {
     return html`
       <div class="history-loading">
         <p>Loading completion history...</p>
-        <p><em>Click the refresh button below to load history data.</em></p>
-        <button class="submit-btn" @click=${this._loadHistory}>Load History</button>
         <div id="history-list"></div>
       </div>
     `;
@@ -1293,6 +1393,135 @@ class SimpleChoresCard extends LitElement {
         </div>
       `;
     }
+  }
+
+  // Service calling methods
+  async _submitAddChore() {
+    if (!this._newChoreName.trim() || !this._newChoreRoom.trim()) {
+      this._showToast("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      const serviceData = {
+        name: this._newChoreName.trim(),
+        room_id: this._newChoreRoom.trim(),
+        frequency: this._newChoreFrequency
+      };
+
+      // Add due date if provided
+      if (this._newChoreDueDate.trim()) {
+        serviceData.start_date = this._newChoreDueDate.trim();
+      }
+
+      // Add assigned_to if provided
+      if (this._newChoreAssignedTo.trim()) {
+        serviceData.assigned_to = this._newChoreAssignedTo.trim();
+      }
+
+      await this.hass.callService("simple_chores", "add_chore", serviceData);
+      this._showToast("Chore created successfully!");
+      this._closeAddChoreModal();
+    } catch (error) {
+      console.error("Simple Chores Card: Error creating chore:", error);
+      this._showToast("Error creating chore. Please try again.");
+    }
+  }
+
+  async _submitEditChore() {
+    if (!this._editChoreName.trim() || !this._editChoreRoom.trim()) {
+      this._showToast("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      const serviceData = {
+        chore_id: this._editChoreId,
+        name: this._editChoreName.trim(),
+        room_id: this._editChoreRoom.trim(),
+        frequency: this._editChoreFrequency
+      };
+
+      // Add due date if provided
+      if (this._editChoreDueDate.trim()) {
+        serviceData.next_due = this._editChoreDueDate.trim();
+      }
+
+      // Add assigned_to if provided
+      if (this._editChoreAssignedTo.trim()) {
+        serviceData.assigned_to = this._editChoreAssignedTo.trim();
+      }
+
+      await this.hass.callService("simple_chores", "update_chore", serviceData);
+      this._showToast("Chore updated successfully!");
+      this._closeEditChoreModal();
+    } catch (error) {
+      console.error("Simple Chores Card: Error updating chore:", error);
+      this._showToast("Error updating chore. Please try again.");
+    }
+  }
+
+  async _completeChore(choreId) {
+    try {
+      await this.hass.callService("simple_chores", "complete_chore", {
+        chore_id: choreId
+      });
+      this._showToast("Chore completed!");
+    } catch (error) {
+      console.error("Simple Chores Card: Error completing chore:", error);
+      this._showToast("Error completing chore. Please try again.");
+    }
+  }
+
+  async _skipChore(choreId) {
+    try {
+      await this.hass.callService("simple_chores", "skip_chore", {
+        chore_id: choreId
+      });
+      this._showToast("Chore skipped to next occurrence!");
+    } catch (error) {
+      console.error("Simple Chores Card: Error skipping chore:", error);
+      this._showToast("Error skipping chore. Please try again.");
+    }
+  }
+
+  async _deleteChore(choreId, choreName) {
+    if (confirm(`Are you sure you want to delete "${choreName}"?`)) {
+      try {
+        await this.hass.callService("simple_chores", "remove_chore", {
+          chore_id: choreId
+        });
+        this._showToast("Chore deleted successfully!");
+      } catch (error) {
+        console.error("Simple Chores Card: Error deleting chore:", error);
+        this._showToast("Error deleting chore. Please try again.");
+      }
+    }
+  }
+
+  _showToast(message) {
+    // Simple toast notification
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    toast.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--primary-color);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 6px;
+      z-index: 10000;
+      font-size: 14px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, 3000);
   }
 
   static get styles() {
