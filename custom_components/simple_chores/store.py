@@ -127,6 +127,11 @@ class SimpleChoresStore:
             "next_due": next_due.isoformat(),
             "created_at": datetime.now().isoformat(),
         }
+        
+        # Debug logging for assignment
+        from homeassistant.core import logger
+        _LOGGER = logger.getLogger(__name__)
+        _LOGGER.info("Creating chore '%s' with assigned_to: %s", name, assigned_to)
         self._data["chores"][chore_id] = chore
         return chore
 

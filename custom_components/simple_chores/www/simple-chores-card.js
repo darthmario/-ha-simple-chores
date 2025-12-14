@@ -111,6 +111,13 @@ class SimpleChoresCard extends LitElement {
       this._formData[formType] = {};
     }
     this._formData[formType][field] = value;
+    
+    // Debug assignment handling
+    if (field === 'assignedTo') {
+      console.log('Simple Chores Card: Assignment changed to:', value);
+      console.log('Simple Chores Card: Full form data:', this._formData);
+    }
+    
     this.requestUpdate();
   }
 
@@ -1652,6 +1659,9 @@ class SimpleChoresCard extends LitElement {
       if (choreData.assignedTo?.trim()) {
         serviceData.assigned_to = choreData.assignedTo.trim();
       }
+      
+      console.log("Simple Chores Card: Creating chore with data:", serviceData);
+      console.log("Simple Chores Card: Assignment data:", choreData.assignedTo);
 
       await this.hass.callService("simple_chores", "add_chore", serviceData);
       this._showToast("Chore created successfully!");

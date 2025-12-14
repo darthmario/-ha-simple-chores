@@ -100,8 +100,9 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             }
             
             # Debug logging for troubleshooting
-            _LOGGER.debug("Chore: %s, Room ID: %s, Room Name: %s, Next Due: %s", 
-                         chore["name"], chore["room_id"], room_name, chore["next_due"])
+            _LOGGER.debug("Chore: %s, Room ID: %s, Room Name: %s, Next Due: %s, Assigned To: %s", 
+                         chore["name"], chore["room_id"], room_name, chore["next_due"], chore.get("assigned_to"))
+            _LOGGER.debug("Full chore data: %s", chore)
 
             # Categorize by due date
             if next_due < today:
@@ -267,7 +268,9 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         assigned_to: str | None = None,
     ) -> dict[str, Any]:
         """Add a new chore."""
+        _LOGGER.info("Coordinator: Adding chore '%s' with assigned_to: %s", name, assigned_to)
         chore = self.store.add_chore(name, room_id, frequency, start_date, assigned_to)
+        _LOGGER.info("Coordinator: Created chore data: %s", chore)
         await self.store.async_save()
         await self.async_request_refresh()
         return chore
