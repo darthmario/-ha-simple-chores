@@ -52,6 +52,13 @@ class SimpleChoresCard extends LitElement {
       // Modal system
       _activeModal: { type: String },
       _modalData: { type: Object },
+      // Individual modal states (kept for compatibility)
+      _showAddRoomModal: { type: Boolean },
+      _showManageRoomsModal: { type: Boolean },
+      _showAddChoreModal: { type: Boolean },
+      _showEditChoreModal: { type: Boolean },
+      _showAllChoresModal: { type: Boolean },
+      _showHistoryModal: { type: Boolean },
       // Form data unified under _formData
       _formData: { type: Object },
     };
@@ -63,6 +70,13 @@ class SimpleChoresCard extends LitElement {
     // Modal system
     this._activeModal = null;
     this._modalData = {};
+    // Individual modal states
+    this._showAddRoomModal = false;
+    this._showManageRoomsModal = false;
+    this._showAddChoreModal = false;
+    this._showEditChoreModal = false;
+    this._showAllChoresModal = false;
+    this._showHistoryModal = false;
     // Unified form data
     this._formData = {};
     this._initializeFormData();
@@ -993,18 +1007,18 @@ class SimpleChoresCard extends LitElement {
     
     console.debug("Simple Chores Card: Set edit data:", this._formData.chore);
     
-    // Force a re-render with the new data before showing the modal
-    this.requestUpdate().then(() => {
-      this._showEditChoreModal = true;
-      // Try to force update the select element after modal is shown
-      setTimeout(() => {
-        const roomSelect = this.shadowRoot?.querySelector('#edit-chore-room');
-        if (roomSelect) {
-          roomSelect.value = this._formData.chore.room;
-          console.debug("Simple Chores Card: Manually set room select value:", roomSelect.value);
-        }
-      }, 100);
-    });
+    // Show the modal and request update
+    this._showEditChoreModal = true;
+    this.requestUpdate();
+    
+    // Try to force update the select element after modal is shown
+    setTimeout(() => {
+      const roomSelect = this.shadowRoot?.querySelector('#edit-chore-room');
+      if (roomSelect) {
+        roomSelect.value = this._formData.chore.room;
+        console.debug("Simple Chores Card: Manually set room select value:", roomSelect.value);
+      }
+    }, 100);
   }
 
   _closeEditChoreModal() {
@@ -1351,6 +1365,133 @@ class SimpleChoresCard extends LitElement {
   async _skipChoreFromModal(choreId) {
     this._closeAllChoresModal();
     await this._skipChore(choreId);
+  }
+
+  _openAllChoresModal() {
+    this._showAllChoresModal = true;
+  }
+
+  _closeAllChoresModal() {
+    this._showAllChoresModal = false;
+  }
+
+  _getAllChores() {
+    // Use the enhanced total_chores sensor which now includes all chore data
+    const totalChoresSensor = this.hass.states["sensor.total_chores"];
+    
+    if (totalChoresSensor && totalChoresSensor.attributes && totalChoresSensor.attributes.chores) {
+      console.log("Simple Chores Card: Found all chores in sensor.total_chores:", totalChoresSensor.attributes.chores);
+      return totalChoresSensor.attributes.chores;
+    }
+    
+    // Fallback: try the due chores if the sensor isn't available yet
+    console.log("Simple Chores Card: sensor.total_chores not available, using fallback...");
+    const dueToday = this._getDueChores("today");
+    const dueThisWeek = this._getDueChores("week");
+    
+    const fallbackChores = [...dueToday, ...dueThisWeek];
+    console.log("Simple Chores Card: Using fallback chores:", fallbackChores.length);
+    
+    return fallbackChores;
+  }
+
+  _renderAllChoresModal() {
+    if (!this._showAllChoresModal) {
+      return html``;
+    }
+
+    const allChores = this._getAllChores();
+    const rooms = this._getRooms();
+
+    return html`
+      <div class="modal-overlay" @click=${this._closeAllChoresModal}>
+        <div class="modal-content large-modal" @click=${(e) => e.stopPropagation()}>
+          <div class="modal-header">
+            <h3>All Active Chores (${allChores.length})</h3>
+            <button class="close-btn" @click=${this._closeAllChoresModal}>
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>
+          <div class="modal-body">
+            ${allChores.length === 0 ? html`
+              <div class="no-chores">
+                <p>No active chores found.</p>
+                <p>Create your first chore using the + button in the header!</p>
+              </div>
+            ` : html`
+              <div class="all-chores-list">
+                ${allChores.map(chore => {
+                  const dueDate = chore.next_due || chore.due_date;
+                  
+                  // Use consolidated room lookup logic
+                  const roomName = this._resolveRoomName(chore, rooms);
+                  
+                  // Get assigned user info
+                  const assignedTo = chore.assigned_to;
+                  let assignedUserName = null;
+                  if (assignedTo) {
+                    const users = this._getUsers();
+                    const assignedUser = users.find(u => u.id === assignedTo);
+                    assignedUserName = assignedUser ? assignedUser.name : assignedTo;
+                  }
+                  
+                  const isOverdue = new Date(dueDate) < new Date().setHours(0,0,0,0);
+                  
+                  return html`
+                    <div class="chore-item ${isOverdue ? 'overdue' : ''}">
+                      <div class="chore-info">
+                        <span class="chore-name">${chore.name}</span>
+                        <span class="chore-separator">•</span>
+                        <span class="chore-room">${roomName}</span>
+                        <span class="chore-separator">•</span>
+                        <span class="chore-due">Due: ${this._formatDate(dueDate)}</span>
+                        <span class="chore-separator">•</span>
+                        <span class="chore-frequency">${chore.frequency || 'Unknown'}</span>
+                        ${assignedUserName ? html`
+                          <span class="chore-separator">•</span>
+                          <span class="chore-assigned">👤 ${assignedUserName}</span>
+                        ` : ''}
+                      </div>
+                      <div class="chore-actions">
+                        <button 
+                          @click=${() => this._editChoreFromModal(chore)}
+                          class="action-btn edit-btn"
+                          title="Edit Chore"
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button 
+                          @click=${() => this._deleteChoreFromModal(chore.id, chore.name)}
+                          class="action-btn delete-btn"
+                          title="Delete Chore"
+                        >
+                          🗑️ Delete
+                        </button>
+                        <button 
+                          @click=${() => this._completeChoreFromModal(chore.id)}
+                          class="action-btn complete-btn"
+                        >
+                          ✓ Complete
+                        </button>
+                        <button 
+                          @click=${() => this._skipChoreFromModal(chore.id)} 
+                          class="action-btn skip-btn"
+                        >
+                          ⏭ Skip
+                        </button>
+                      </div>
+                    </div>
+                  `;
+                })}
+              </div>
+            `}
+          </div>
+          <div class="modal-footer">
+            <button class="submit-btn" @click=${this._closeAllChoresModal}>Close</button>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   _openHistoryModal() {
