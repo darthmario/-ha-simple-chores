@@ -59,6 +59,7 @@ class SimpleChoresCard extends LitElement {
       _showEditChoreModal: { type: Boolean },
       _showAllChoresModal: { type: Boolean },
       _showHistoryModal: { type: Boolean },
+      _showCompleteChoreModal: { type: Boolean },
       // Form data unified under _formData
       _formData: { type: Object },
     };
@@ -77,6 +78,7 @@ class SimpleChoresCard extends LitElement {
     this._showEditChoreModal = false;
     this._showAllChoresModal = false;
     this._showHistoryModal = false;
+    this._showCompleteChoreModal = false;
     // Unified form data
     this._formData = {};
     this._initializeFormData();
@@ -101,6 +103,12 @@ class SimpleChoresCard extends LitElement {
         frequency: "daily",
         dueDate: "",
         assignedTo: ""
+      },
+      completion: {
+        choreId: "",
+        choreName: "",
+        completedBy: "",
+        reassignTo: ""
       }
     };
   }
@@ -121,15 +129,33 @@ class SimpleChoresCard extends LitElement {
     this.requestUpdate();
   }
 
-  // Form validation utilities
+  // Enhanced form validation with user-friendly messages
   _validateForm(formType, requiredFields = []) {
     const formData = this._formData[formType];
-    if (!formData) return { valid: false, message: "Form data not found" };
+    if (!formData) {
+      return { 
+        valid: false, 
+        message: "There was an error with the form. Please try refreshing the page." 
+      };
+    }
+    
+    const fieldMessages = {
+      name: "Please enter a name",
+      room: "Please select a room",
+      completedBy: "Please select who completed this chore",
+      frequency: "Please select how often this chore repeats"
+    };
     
     for (const field of requiredFields) {
       const value = formData[field];
       if (!value || (typeof value === 'string' && !value.trim())) {
-        return { valid: false, message: `${this._formatFieldName(field)} is required` };
+        const message = fieldMessages[field] || `${this._formatFieldName(field)} is required`;
+        return { valid: false, message };
+      }
+      
+      // Additional validation rules
+      if (field === 'name' && value.length > 100) {
+        return { valid: false, message: "Name is too long. Please use 100 characters or fewer." };
       }
     }
     return { valid: true };
@@ -151,6 +177,13 @@ class SimpleChoresCard extends LitElement {
         frequency: "daily",
         dueDate: "",
         assignedTo: ""
+      };
+    } else if (formType === 'completion') {
+      this._formData.completion = {
+        choreId: "",
+        choreName: "",
+        completedBy: "",
+        reassignTo: ""
       };
     }
     this.requestUpdate();
@@ -280,6 +313,7 @@ class SimpleChoresCard extends LitElement {
         ${this._renderEditChoreModal()}
         ${this._renderAllChoresModal()}
         ${this._renderHistoryModal()}
+        ${this._renderCompleteChoreModal()}
       </ha-card>
     `;
   }
@@ -310,6 +344,11 @@ class SimpleChoresCard extends LitElement {
   _renderChoreList(chores, title) {
     const filteredChores = this._filterChoresByRoom(chores);
     
+    // Performance optimization: limit initial render for large lists
+    const maxInitialRender = 20;
+    const choresToRender = filteredChores.slice(0, maxInitialRender);
+    const hasMore = filteredChores.length > maxInitialRender;
+    
     return html`
       <div class="section">
         <h3>${title} (${filteredChores.length})</h3>
@@ -317,7 +356,12 @@ class SimpleChoresCard extends LitElement {
           <p class="no-chores">No chores ${title.toLowerCase()}${this._selectedRoom !== 'all' ? ' in this room' : ''}</p>
         ` : html`
           <div class="chore-list">
-            ${filteredChores.map(chore => this._renderChore(chore))}
+            ${choresToRender.map(chore => this._renderChore(chore))}
+            ${hasMore ? html`
+              <button class="load-more-btn" @click=${() => this._loadMoreChores(title, filteredChores)}>
+                Load ${filteredChores.length - maxInitialRender} more chores...
+              </button>
+            ` : ''}
           </div>
         `}
       </div>
@@ -379,7 +423,7 @@ class SimpleChoresCard extends LitElement {
             🗑️ Delete
           </button>
           <button 
-            @click=${() => this._completeChore(chore.id)}
+            @click=${() => this._openCompleteChoreModal(chore)}
             class="action-btn complete-btn"
           >
             ✓ Complete
@@ -974,15 +1018,15 @@ class SimpleChoresCard extends LitElement {
               <label for="chore-assigned-to">Assigned To (optional)</label>
               <select 
                 id="chore-assigned-to"
-                .value=${this._formData.chore.assignedTo}
                 @change=${this._handleChoreAssignedToInput}
               >
-                <option value="">No assignment (anyone can complete)</option>
+                <option value="" ?selected=${!this._formData.chore.assignedTo}>No assignment (anyone can complete)</option>
                 ${this._getUsers().map(user => html`
-                  <option value=${user.id}>
+                  <option value=${user.id} ?selected=${this._formData.chore.assignedTo === user.id}>
                     ${user.name}
                   </option>
                 `)}
+              </select>
               </select>
               <small>Assign this chore to a specific person or leave unassigned</small>
             </div>
@@ -1031,12 +1075,20 @@ class SimpleChoresCard extends LitElement {
     this._showEditChoreModal = true;
     this.requestUpdate();
     
-    // Try to force update the select element after modal is shown
+    // Force update the select elements after modal is shown
     setTimeout(() => {
       const roomSelect = this.shadowRoot?.querySelector('#edit-chore-room');
+      const assignSelect = this.shadowRoot?.querySelector('#edit-chore-assigned-to');
+      
       if (roomSelect) {
         roomSelect.value = this._formData.chore.room;
         console.debug("Simple Chores Card: Manually set room select value:", roomSelect.value);
+      }
+      
+      if (assignSelect) {
+        assignSelect.value = this._formData.chore.assignedTo || "";
+        console.debug("Simple Chores Card: Manually set assignment select value:", assignSelect.value);
+        console.debug("Simple Chores Card: Available assignment options:", Array.from(assignSelect.options).map(o => ({value: o.value, text: o.text})));
       }
     }, 100);
   }
@@ -1064,6 +1116,14 @@ class SimpleChoresCard extends LitElement {
 
   _handleEditChoreAssignedToInput(e) {
     this._handleFormInput('chore', 'assignedTo', e.target.value);
+  }
+
+  _handleCompletedByInput(e) {
+    this._handleFormInput('completion', 'completedBy', e.target.value);
+  }
+
+  _handleReassignToInput(e) {
+    this._handleFormInput('completion', 'reassignTo', e.target.value);
   }
 
 
@@ -1137,12 +1197,11 @@ class SimpleChoresCard extends LitElement {
               <label for="edit-chore-assigned-to">Assigned To (optional)</label>
               <select 
                 id="edit-chore-assigned-to"
-                .value=${this._formData.chore.assignedTo}
                 @change=${this._handleEditChoreAssignedToInput}
               >
-                <option value="">No assignment (anyone can complete)</option>
+                <option value="" ?selected=${!this._formData.chore.assignedTo}>No assignment (anyone can complete)</option>
                 ${this._getUsers().map(user => html`
-                  <option value=${user.id}>
+                  <option value=${user.id} ?selected=${this._formData.chore.assignedTo === user.id}>
                     ${user.name}
                   </option>
                 `)}
@@ -1281,7 +1340,7 @@ class SimpleChoresCard extends LitElement {
                           🗑️ Delete
                         </button>
                         <button 
-                          @click=${() => this._completeChoreFromModal(chore.id)}
+                          @click=${() => this._openCompleteChoreModalFromAllChores(chore)}
                           class="action-btn complete-btn"
                         >
                           ✓ Complete
@@ -1355,6 +1414,22 @@ class SimpleChoresCard extends LitElement {
     this._showAllChoresModal = false;
     this._showEditChoreModal = true;
     this.requestUpdate();
+    
+    // Force update the select elements after modal is shown
+    setTimeout(() => {
+      const roomSelect = this.shadowRoot?.querySelector('#edit-chore-room');
+      const assignSelect = this.shadowRoot?.querySelector('#edit-chore-assigned-to');
+      
+      if (roomSelect) {
+        roomSelect.value = this._formData.chore.room;
+        console.log("Simple Chores Card: Set room select from modal:", roomSelect.value);
+      }
+      
+      if (assignSelect) {
+        assignSelect.value = this._formData.chore.assignedTo || "";
+        console.log("Simple Chores Card: Set assignment select from modal:", assignSelect.value);
+      }
+    }, 100);
   }
 
   async _deleteChoreFromModal(choreId, choreName) {
@@ -1473,7 +1548,7 @@ class SimpleChoresCard extends LitElement {
                           🗑️ Delete
                         </button>
                         <button 
-                          @click=${() => this._completeChoreFromModal(chore.id)}
+                          @click=${() => this._openCompleteChoreModalFromAllChores(chore)}
                           class="action-btn complete-btn"
                         >
                           ✓ Complete
@@ -1499,140 +1574,77 @@ class SimpleChoresCard extends LitElement {
     `;
   }
 
-  _openHistoryModal() {
-    this._showHistoryModal = true;
-    // Auto-load history when modal opens
-    setTimeout(() => this._loadHistory(), 100);
-  }
 
-  _closeHistoryModal() {
-    this._showHistoryModal = false;
-  }
-
-  async _getCompletionHistory() {
+  _openCompleteChoreModal(chore) {
+    // Try to get current user ID from Home Assistant context
+    let currentUserId = "";
     try {
-      // Get completion history from the total_chores sensor
-      const totalChoresSensor = this.hass.states["sensor.simple_chores_total"];
-      
-      if (totalChoresSensor && totalChoresSensor.attributes && totalChoresSensor.attributes.completion_history) {
-        const history = totalChoresSensor.attributes.completion_history;
-        console.log("Simple Chores Card: Found completion history:", history);
-        
-        // Sort by completion date (newest first)
-        return history.sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
+      // Check if we can get the current user from hass context
+      if (this.hass && this.hass.user) {
+        currentUserId = this.hass.user.id;
       }
-      
-      console.log("Simple Chores Card: No completion history found in sensor.simple_chores_total");
-      return [];
-      
-    } catch (error) {
-      console.error("Simple Chores Card: Failed to get completion history:", error);
-      this._showToast("Error loading completion history");
-      return [];
-    }
-  }
-
-  _formatDateTime(dateTimeString) {
-    if (!dateTimeString) return "Unknown Date";
-    
-    try {
-      const date = new Date(dateTimeString);
-      if (isNaN(date.getTime())) return "Invalid Date";
-      
-      return date.toLocaleString();
     } catch (e) {
-      return "Invalid Date";
-    }
-  }
-
-  _renderHistoryModal() {
-    if (!this._showHistoryModal) {
-      return html``;
+      console.debug("Could not get current user ID:", e);
     }
 
-    return html`
-      <div class="modal-overlay" @click=${this._closeHistoryModal}>
-        <div class="modal-content large-modal" @click=${(e) => e.stopPropagation()}>
-          <div class="modal-header">
-            <h3>Completion History</h3>
-            <button class="close-btn" @click=${this._closeHistoryModal}>
-              <ha-icon icon="mdi:close"></ha-icon>
-            </button>
-          </div>
-          <div class="modal-body">
-            ${this._renderHistoryContent()}
-          </div>
-          <div class="modal-footer">
-            <button class="submit-btn" @click=${this._closeHistoryModal}>Close</button>
-          </div>
-        </div>
-      </div>
-    `;
+    this._formData.completion = {
+      choreId: chore.id,
+      choreName: chore.name,
+      completedBy: currentUserId, // Default to current user
+      reassignTo: chore.assigned_to || "" // Keep current assignment by default
+    };
+    this._showCompleteChoreModal = true;
   }
 
-  _renderHistoryContent() {
-    return html`
-      <div class="history-loading">
-        <p>Loading completion history...</p>
-        <div id="history-list"></div>
-      </div>
-    `;
-  }
-
-  async _loadHistory() {
-    const historyContainer = this.shadowRoot?.querySelector('#history-list');
-    if (!historyContainer) return;
-
-    historyContainer.innerHTML = '<p>Loading...</p>';
-    
+  _openCompleteChoreModalFromAllChores(chore) {
+    // Try to get current user ID
+    let currentUserId = "";
     try {
-      const history = await this._getCompletionHistory();
-      
-      if (history.length === 0) {
-        historyContainer.innerHTML = `
-          <div class="no-history">
-            <p><strong>No completion history found.</strong></p>
-            <p>History will appear here after you complete some chores!</p>
-            <p><em>Note: Only recent completions may be available depending on system configuration.</em></p>
-          </div>
-        `;
-        return;
+      if (this.hass && this.hass.user) {
+        currentUserId = this.hass.user.id;
       }
-
-      const historyHtml = history.map(entry => {
-        return `
-          <div class="history-item">
-            <div class="history-info">
-              <span class="history-chore-name">${entry.chore_name || 'Unknown Chore'}</span>
-              <span class="history-separator">•</span>
-              <span class="history-completed-by">${entry.completed_by_name || 'Unknown User'}</span>
-              <span class="history-separator">•</span>
-              <span class="history-completed-at">${this._formatDateTime(entry.completed_at)}</span>
-            </div>
-          </div>
-        `;
-      }).join('');
-
-      historyContainer.innerHTML = `
-        <div class="history-header">
-          <h4>Recent Completions (${history.length})</h4>
-        </div>
-        <div class="history-list">
-          ${historyHtml}
-        </div>
-      `;
-
-    } catch (error) {
-      console.error("Simple Chores Card: Error loading history:", error);
-      historyContainer.innerHTML = `
-        <div class="history-error">
-          <p><strong>Error loading completion history.</strong></p>
-          <p>This feature requires the Simple Chores integration to store completion history.</p>
-          <p><em>Try completing a chore first, then check back here.</em></p>
-        </div>
-      `;
+    } catch (e) {
+      console.debug("Could not get current user ID:", e);
     }
+
+    this._formData.completion = {
+      choreId: chore.id,
+      choreName: chore.name,
+      completedBy: currentUserId,
+      reassignTo: chore.assigned_to || ""
+    };
+    this._showAllChoresModal = false;
+    this._showCompleteChoreModal = true;
   }
+
+  _closeCompleteChoreModal() {
+    this._showCompleteChoreModal = false;
+    this._resetForm('completion');
+  }
+
+  _loadMoreChores(title, allChores) {
+    // For now, just render all chores (can be enhanced with true virtualization)
+    const section = this.shadowRoot.querySelector('.section h3').parentElement;
+    const choreList = section.querySelector('.chore-list');
+    const loadMoreBtn = choreList.querySelector('.load-more-btn');
+    
+    // Remove load more button
+    if (loadMoreBtn) {
+      loadMoreBtn.remove();
+    }
+    
+    // Add remaining chores
+    const rendered = choreList.children.length;
+    const remaining = allChores.slice(rendered);
+    
+    remaining.forEach(chore => {
+      const choreElement = this._renderChore(chore);
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = choreElement.strings.join('');
+      choreList.appendChild(tempDiv.firstElementChild);
+    });
+  }
+
 
   // Service calling methods
   async _submitAddChore() {
@@ -1717,6 +1729,200 @@ class SimpleChoresCard extends LitElement {
       console.error("Simple Chores Card: Error completing chore:", error);
       this._showToast("Error completing chore. Please try again.");
     }
+  }
+
+  async _submitCompleteChore() {
+    const validation = this._validateForm('completion', ['completedBy']);
+    if (!validation.valid) {
+      this._showToast(validation.message);
+      return;
+    }
+
+    try {
+      const completionData = this._formData.completion;
+      const serviceData = {
+        chore_id: completionData.choreId,
+        user_id: completionData.completedBy
+      };
+
+      console.log("Simple Chores Card: Completing chore with data:", serviceData);
+
+      await this.hass.callService("simple_chores", "complete_chore", serviceData);
+      
+      // If reassignment is requested, update the chore assignment
+      if (completionData.reassignTo !== undefined) {
+        const reassignData = {
+          chore_id: completionData.choreId,
+          assigned_to: completionData.reassignTo || null
+        };
+        console.log("Simple Chores Card: Reassigning chore:", reassignData);
+        await this.hass.callService("simple_chores", "update_chore", reassignData);
+      }
+
+      this._showToast(`Chore "${completionData.choreName}" completed!`);
+      this._closeCompleteChoreModal();
+    } catch (error) {
+      console.error("Simple Chores Card: Error completing chore:", error);
+      this._showToast("Error completing chore. Please try again.");
+    }
+  }
+
+  async _getCompletionHistory() {
+    try {
+      // Try to get completion history from the total_chores sensor
+      const totalChoresSensor = this.hass.states["sensor.simple_chores_total"];
+      
+      if (totalChoresSensor && totalChoresSensor.attributes && totalChoresSensor.attributes.completion_history) {
+        const history = totalChoresSensor.attributes.completion_history;
+        console.log("Simple Chores Card: Found completion history:", history);
+        
+        // Sort by completion date (newest first)
+        return history.sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
+      }
+      
+      console.log("Simple Chores Card: No completion history found in sensor.simple_chores_total");
+      return [];
+      
+    } catch (error) {
+      console.error("Simple Chores Card: Failed to get completion history:", error);
+      this._showToast("Error loading completion history");
+      return [];
+    }
+  }
+
+  _openHistoryModal() {
+    this._showHistoryModal = true;
+  }
+
+  _closeHistoryModal() {
+    this._showHistoryModal = false;
+  }
+
+  async _renderHistoryModal() {
+    if (!this._showHistoryModal) {
+      return html``;
+    }
+
+    let history;
+    try {
+      history = await this._getCompletionHistory();
+    } catch (error) {
+      console.error("Simple Chores Card: Error loading history:", error);
+      history = [];
+    }
+
+    return html`
+      <div class="modal-overlay" @click=${this._closeHistoryModal}>
+        <div class="modal-content large-modal" @click=${(e) => e.stopPropagation()}>
+          <div class="modal-header">
+            <h3>📊 Completion History (${history.length})</h3>
+            <button class="close-btn" @click=${this._closeHistoryModal}>
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>
+          <div class="modal-body">
+            ${history.length === 0 ? html`
+              <div class="no-history">
+                <p>No completion history found.</p>
+                <p>Complete some chores to see your history here!</p>
+              </div>
+            ` : html`
+              <div class="history-list">
+                ${history.map(entry => {
+                  const completedDate = new Date(entry.completed_at);
+                  const formattedDate = completedDate.toLocaleDateString();
+                  const formattedTime = completedDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                  
+                  return html`
+                    <div class="history-item">
+                      <div class="history-info">
+                        <span class="chore-name">${entry.chore_name}</span>
+                        <span class="completed-by">by ${entry.completed_by_name}</span>
+                      </div>
+                      <div class="completion-details">
+                        <span class="completion-date">${formattedDate}</span>
+                        <span class="completion-time">${formattedTime}</span>
+                      </div>
+                    </div>
+                  `;
+                })}
+              </div>
+            `}
+          </div>
+          <div class="modal-footer">
+            <button class="cancel-btn" @click=${this._closeHistoryModal}>Close</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  _renderCompleteChoreModal() {
+    if (!this._showCompleteChoreModal) {
+      return html``;
+    }
+
+    const users = this._getUsers();
+
+    return html`
+      <div class="modal-overlay" @click=${this._closeCompleteChoreModal}>
+        <div class="modal-content" @click=${(e) => e.stopPropagation()}>
+          <div class="modal-header">
+            <h3>✓ Complete Chore</h3>
+            <button class="close-btn" @click=${this._closeCompleteChoreModal}>
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="completion-info">
+              <h4>📋 ${this._formData.completion.choreName}</h4>
+              <p>Mark this chore as completed and optionally reassign for next time.</p>
+            </div>
+            
+            <div class="form-group">
+              <label for="completed-by">Who completed this chore? *</label>
+              <select 
+                id="completed-by"
+                @change=${this._handleCompletedByInput}
+              >
+                <option value="" ?selected=${!this._formData.completion.completedBy}>Select who completed it...</option>
+                ${users.map(user => html`
+                  <option value=${user.id} ?selected=${this._formData.completion.completedBy === user.id}>
+                    ${user.name}
+                  </option>
+                `)}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="reassign-to">Reassign for next time (optional)</label>
+              <select 
+                id="reassign-to"
+                @change=${this._handleReassignToInput}
+              >
+                <option value="" ?selected=${!this._formData.completion.reassignTo}>No specific assignment</option>
+                ${users.map(user => html`
+                  <option value=${user.id} ?selected=${this._formData.completion.reassignTo === user.id}>
+                    ${user.name}
+                  </option>
+                `)}
+              </select>
+              <small>Leave as "No specific assignment" or choose someone to assign this chore to for next time</small>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="cancel-btn" @click=${this._closeCompleteChoreModal}>Cancel</button>
+            <button 
+              class="submit-btn" 
+              @click=${this._submitCompleteChore}
+              ?disabled=${!this._formData.completion.completedBy?.trim()}
+            >
+              ✓ Mark Complete
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   async _skipChore(choreId) {

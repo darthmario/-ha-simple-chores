@@ -1,6 +1,7 @@
 """Data storage for the Household Tasks integration."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from datetime import date, datetime
@@ -30,6 +31,8 @@ class SimpleChoresStore:
             "chores": {},
             "history": [],
         }
+        self._dirty = False
+        self._save_task: asyncio.Task | None = None
 
     @property
     def rooms(self) -> dict[str, Any]:
@@ -54,8 +57,31 @@ class SimpleChoresStore:
         return self._data
 
     async def async_save(self) -> None:
-        """Save data to storage."""
+        """Save data to storage immediately."""
         await self._store.async_save(self._data)
+        self._dirty = False
+
+    async def async_save_debounced(self, delay: float = 2.0) -> None:
+        """Save data to storage with debouncing to reduce I/O operations."""
+        self._dirty = True
+        
+        # Cancel existing save task
+        if self._save_task and not self._save_task.done():
+            self._save_task.cancel()
+        
+        async def _delayed_save():
+            try:
+                await asyncio.sleep(delay)
+                if self._dirty:
+                    await self._store.async_save(self._data)
+                    self._dirty = False
+                    _LOGGER.debug("Debounced save completed")
+            except asyncio.CancelledError:
+                _LOGGER.debug("Debounced save cancelled")
+            except Exception as e:
+                _LOGGER.error("Error in debounced save: %s", e)
+        
+        self._save_task = asyncio.create_task(_delayed_save())
 
     # Room operations
     def add_room(self, name: str, icon: str | None = None) -> dict[str, Any]:
@@ -200,10 +226,28 @@ class SimpleChoresStore:
         }
         self._data["history"].append(history_entry)
 
-        # Always keep history limited to prevent memory bloat
-        self._data["history"] = self._data["history"][-MAX_HISTORY_ENTRIES:]
+        # Efficient history cleanup to prevent memory bloat
+        self._cleanup_history()
 
         return chore
+
+    def _cleanup_history(self) -> None:
+        """Efficiently clean up history entries to prevent memory bloat."""
+        history = self._data["history"]
+        
+        # Only cleanup if we exceed the limit
+        if len(history) <= MAX_HISTORY_ENTRIES:
+            return
+        
+        # Sort by completion date (newest first) and keep only recent entries
+        try:
+            history.sort(key=lambda x: x.get("completed_at", ""), reverse=True)
+            self._data["history"] = history[:MAX_HISTORY_ENTRIES]
+            _LOGGER.debug("History cleanup: kept %d most recent entries", len(self._data["history"]))
+        except Exception as e:
+            # Fallback to simple truncation if sorting fails
+            _LOGGER.warning("History sort failed, using simple truncation: %s", e)
+            self._data["history"] = history[-MAX_HISTORY_ENTRIES:]
 
     def skip_chore(self, chore_id: str, next_due: date) -> dict[str, Any] | None:
         """Skip a chore to the next occurrence without marking complete."""

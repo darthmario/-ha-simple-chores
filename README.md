@@ -1,22 +1,56 @@
 # Simple Chores
 
-A Home Assistant custom integration for tracking simple chores with room organization, multiple frequencies, user attribution, and automatic rescheduling.
+A comprehensive Home Assistant custom integration for tracking household chores with advanced room organization, flexible scheduling, user assignment & attribution, and intelligent automation.
 
 [![HACS Validation](https://github.com/darthmario/simple-chores/actions/workflows/hacs.yaml/badge.svg)](https://github.com/darthmario/simple-chores/actions/workflows/hacs.yaml)
 [![Hassfest Validation](https://github.com/darthmario/simple-chores/actions/workflows/hassfest.yaml/badge.svg)](https://github.com/darthmario/simple-chores/actions/workflows/hassfest.yaml)
 
 ## Features
 
-- **Rooms**: Use existing Home Assistant Areas or create custom rooms
-- **Chores**: Assign chores to rooms with configurable frequencies
-- **Frequencies**: Daily, weekly, monthly, quarterly, yearly
-- **Weekly View**: See chores due this week (Sunday start)
-- **Auto-reschedule**: When marked complete, automatically schedule next occurrence
-- **User Attribution**: Track who completed each chore (defaults to logged-in user)
-- **Completion History**: Full history of who completed what and when
-- **Notifications**: Push notifications when tasks are due (works with HA mobile apps)
-- **Calendar**: Visual calendar view of scheduled chores
-- **Custom Lovelace Card**: Beautiful UI for managing and completing chores
+### 🏠 **Room Management**
+- **Dual Room System**: Use existing Home Assistant Areas or create custom rooms
+- **Room Icons**: Visual icons for easy identification
+- **Room-based Organization**: Filter and organize chores by location
+- **Mixed Room Types**: Seamlessly combine HA Areas with custom spaces
+
+### 📋 **Advanced Chore Management**
+- **Flexible Frequencies**: Daily, weekly, monthly, quarterly, yearly scheduling
+- **Rolling 7-Day View**: Dynamic "Due in Next 7 Days" instead of static weekly view
+- **Smart Auto-reschedule**: Automatically calculate and schedule next occurrence
+- **Due Date Override**: Set custom start dates for any chore
+- **Bulk Management**: "All Active Chores" modal for comprehensive oversight
+
+### 👥 **User Assignment & Attribution**
+- **Pre-assignment**: Assign chores to specific users before they're due
+- **Completion Attribution**: Track who actually completed each chore
+- **Smart Completion Modal**: Select completion user and optionally reassign for next time
+- **Shared Device Support**: Perfect for shared tablets/displays with central login
+- **User Detection**: Automatically detects current Home Assistant user as default
+- **Flexible Reassignment**: Change assignments during completion workflow
+
+### 📊 **Comprehensive Tracking**
+- **Real-time Sensors**: Due today, next 7 days, overdue, and total counts
+- **Completion History**: Full audit trail of who completed what and when
+- **User Statistics**: Performance tracking per user
+- **Assignment Display**: See who's assigned to each chore in all views
+
+### 🔔 **Smart Notifications**
+- **Daily Summaries**: Push notifications with chore details and room info
+- **Configurable Timing**: Set notification time to your preference
+- **Multi-device Support**: Target specific mobile devices
+- **Urgency Indicators**: Distinguish between due and overdue tasks
+
+### 📅 **Calendar Integration**
+- **Visual Calendar**: See all scheduled chores in Home Assistant calendar
+- **Timeline View**: Plan ahead with future due dates
+- **Calendar Events**: Each chore creates calendar entries
+
+### 🎨 **Modern UI & UX**
+- **Custom Lovelace Card**: Beautiful, responsive interface
+- **Modal-based Workflows**: Clean, focused editing experiences
+- **Form Validation**: Intelligent input validation with helpful messages
+- **Performance Optimized**: Caching system for fast loading
+- **Intuitive Design**: Easy-to-use interface for all family members
 
 ## Installation
 
@@ -55,7 +89,7 @@ The integration creates the following entities:
 | Entity | Type | Description |
 |--------|------|-------------|
 | `sensor.simple_chores_due_today` | Sensor | Count of chores due today |
-| `sensor.simple_chores_due_this_week` | Sensor | Count of chores due this week |
+| `sensor.simple_chores_due_next_7_days` | Sensor | Count of chores due in next 7 days (rolling) |
 | `sensor.simple_chores_overdue` | Sensor | Count of overdue chores |
 | `sensor.simple_chores_total` | Sensor | Total number of chores |
 | `binary_sensor.simple_chores_has_overdue` | Binary Sensor | True if any overdue chores |
@@ -74,7 +108,7 @@ data:
 ```
 
 ### `simple_chores.add_chore`
-Create a new chore.
+Create a new chore with optional user assignment.
 
 ```yaml
 service: simple_chores.add_chore
@@ -83,6 +117,7 @@ data:
   room_id: "area_kitchen"  # Use HA Area ID or custom room ID
   frequency: "weekly"
   start_date: "2024-01-15"  # Optional, defaults to today
+  assigned_to: "user-uuid"  # Optional, assign to specific user
 ```
 
 ### `simple_chores.complete_chore`
@@ -93,6 +128,20 @@ service: simple_chores.complete_chore
 data:
   chore_id: "abc123"
   user_id: "user-uuid"  # Optional, defaults to current user
+```
+
+### `simple_chores.update_chore`
+Update an existing chore's details, including reassignment.
+
+```yaml
+service: simple_chores.update_chore
+data:
+  chore_id: "abc123"
+  name: "Deep clean counters"  # Optional
+  room_id: "area_kitchen"      # Optional
+  frequency: "monthly"         # Optional
+  next_due: "2024-02-01"       # Optional
+  assigned_to: "user-uuid"     # Optional, use null to unassign
 ```
 
 ### `simple_chores.skip_chore`
@@ -164,13 +213,30 @@ If you prefer the simple approach:
 
 ### Card Features
 
-- Weekly view with chores grouped by day
-- Room filtering
-- Quick complete via checkbox
-- User selector for attribution on shared devices
-- Add chore/room forms
-- Overdue highlighting
-- Skip to next occurrence
+#### 📊 **Smart Views**
+- **Due Today**: Immediate action items with urgency indicators
+- **Due in Next 7 Days**: Rolling 7-day lookahead for planning
+- **All Active Chores**: Comprehensive modal with all chores and actions
+- **Room Filtering**: Focus on specific areas of your home
+
+#### ⚡ **Quick Actions**
+- **Smart Complete**: Modal workflow to select who completed and optionally reassign
+- **Inline Edit**: Direct editing of chore details with pre-populated forms
+- **Skip to Next**: Move chores to next occurrence without marking complete
+- **Bulk Management**: Manage multiple chores from unified interface
+
+#### 👥 **User Management**
+- **Assignment Display**: See who's responsible for each chore
+- **User Selection**: Choose completion user on shared devices
+- **Flexible Reassignment**: Change assignments during completion
+- **Auto-detection**: Automatically selects current user as default
+
+#### 🎨 **Enhanced UX**
+- **Unified Form System**: Consistent, validated input handling
+- **Performance Caching**: Fast loading with intelligent data caching
+- **Modal Workflows**: Clean, focused editing experiences
+- **Error Handling**: Helpful validation messages and error recovery
+- **Room Name Resolution**: Intelligent room ID to name mapping
 
 ## Room Types
 
@@ -183,14 +249,74 @@ When adding a chore, you can assign it to either type:
 - HA Areas: Use `area_<area_id>` (e.g., `area_kitchen`)
 - Custom rooms: Use the room ID returned when creating (e.g., `custom_abc123`)
 
+## Smart Completion Workflow
+
+The Simple Chores integration features an intelligent completion system designed for households with shared devices and multiple users:
+
+### 🎢 **Completion Modal**
+When you click "✓ Complete" on any chore:
+
+1. **Smart User Detection**: Automatically detects and pre-selects the current Home Assistant user
+2. **Flexible Attribution**: Choose who actually completed the chore (perfect for shared tablets/displays)
+3. **Optional Reassignment**: Optionally change who the chore is assigned to for next time
+4. **Clear Validation**: Ensures proper completion attribution with helpful error messages
+
+### 👥 **Perfect for Shared Households**
+- **Shared Displays**: Family members can properly credit who did the work
+- **Central Login**: Works great with one HA account used by multiple people
+- **Flexible Workflows**: Assign chores to one person, but allow anyone to complete them
+- **Accurate History**: Maintain proper completion records for all family members
+
+### ⚡ **Example Workflows**
+
+**Scenario 1: Assigned Chore**
+- Chore assigned to "Alice"
+- Bob completes it using shared tablet
+- Modal opens → Bob selects himself as completer
+- Optionally reassigns to "Charlie" for next occurrence
+
+**Scenario 2: Unassigned Chore**
+- Chore has no specific assignment
+- Anyone can complete it
+- Current user automatically selected
+- Can assign to specific person for next time
+
+**Scenario 3: Quick Personal Use**
+- Alice using her own device
+- Completes her assigned chore
+- Modal auto-selects Alice, keeps assignment the same
+- One-click completion with smart defaults
+
+## Assignment System
+
+The integration provides a comprehensive user assignment system:
+
+### 🎡 **Assignment Types**
+- **Pre-assignment**: Assign chores to users when creating or editing
+- **Completion Attribution**: Track who actually completed each chore
+- **Flexible Reassignment**: Change assignments during completion or editing
+
+### 📊 **User Data Sources**
+The integration intelligently sources user information from:
+1. **Integration Sensors**: Custom user lists from sensor attributes
+2. **Home Assistant Users**: Fallback to HA person entities
+3. **Default Fallback**: Basic user entries for system reliability
+
+### 📈 **Performance Features**
+- **Smart Caching**: User and room data cached for improved performance
+- **Efficient Lookups**: Optimized room name resolution
+- **Real-time Updates**: Changes reflect immediately across all interfaces
+
 ## Notifications
 
 The integration can send daily push notifications to your mobile devices via the Home Assistant Companion App.
 
 Notifications include:
-- List of chores due today
-- Room information for each chore
-- Tap to open Home Assistant
+- **Detailed Chore List**: Each chore with room and assignment info
+- **Urgency Indicators**: Visual distinction between due and overdue
+- **User Assignments**: See who's responsible for each task
+- **Interactive Actions**: Tap to open Home Assistant for quick completion
+- **Smart Summaries**: Concise but informative daily overviews
 
 ## Automations
 

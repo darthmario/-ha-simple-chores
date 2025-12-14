@@ -271,7 +271,7 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         _LOGGER.info("Coordinator: Adding chore '%s' with assigned_to: %s", name, assigned_to)
         chore = self.store.add_chore(name, room_id, frequency, start_date, assigned_to)
         _LOGGER.info("Coordinator: Created chore data: %s", chore)
-        await self.store.async_save()
+        await self.store.async_save_debounced()  # Use debounced save for performance
         await self.async_request_refresh()
         return chore
 
@@ -287,7 +287,7 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Update an existing chore."""
         chore = self.store.update_chore(chore_id, name, room_id, frequency, next_due, assigned_to)
         if chore:
-            await self.store.async_save()
+            await self.store.async_save_debounced()  # Use debounced save for performance
             await self.async_request_refresh()
         return chore
 
@@ -295,6 +295,6 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Remove a chore."""
         result = self.store.remove_chore(chore_id)
         if result:
-            await self.store.async_save()
+            await self.store.async_save()  # Use immediate save for deletions
             await self.async_request_refresh()
         return result
