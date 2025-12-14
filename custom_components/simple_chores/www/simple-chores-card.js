@@ -264,7 +264,7 @@ class SimpleChoresCard extends LitElement {
         <div class="card-content">
           ${this._renderStats()}
           ${this._renderChoreList(dueToday, "Due Today")}
-          ${this._renderChoreList(dueThisWeek, "Due This Week")}
+          ${this._renderChoreList(dueThisWeek, "Due in Next 7 Days")}
         </div>
         
         ${this._renderAddRoomModal()}
@@ -1046,34 +1046,6 @@ class SimpleChoresCard extends LitElement {
     this._handleFormInput('chore', 'assignedTo', e.target.value);
   }
 
-  _submitEditChore() {
-    const validation = this._validateForm('chore', ['name', 'room']);
-    if (!validation.valid) {
-      this._showToast(validation.message);
-      return;
-    }
-
-    const choreData = this._formData.chore;
-    const serviceData = {
-      chore_id: choreData.id,
-      name: choreData.name.trim(),
-      room_id: choreData.room,
-      frequency: choreData.frequency
-    };
-    
-    // Only include next_due if a date is provided
-    if (choreData.dueDate?.trim()) {
-      serviceData.next_due = choreData.dueDate;
-    }
-
-    this.hass.callService("simple_chores", "update_chore", serviceData).then(() => {
-      this._showToast(`Chore "${choreData.name}" updated successfully!`);
-      this._closeEditChoreModal();
-      this.requestUpdate();
-    }).catch(error => {
-      this._showToast(`Error updating chore: ${error.message}`);
-    });
-  }
 
   _renderEditChoreModal() {
     if (!this._showEditChoreModal) {

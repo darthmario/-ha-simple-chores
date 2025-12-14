@@ -99,7 +99,7 @@ class SimpleChoresDueTodaySensor(SimpleChoresBaseSensor):
 
 
 class SimpleChoresDueThisWeekSensor(SimpleChoresBaseSensor):
-    """Sensor showing number of chores due this week."""
+    """Sensor showing number of chores due in next 7 days."""
 
     def __init__(
         self, coordinator: SimpleChoresCoordinator, entry: ConfigEntry
@@ -109,13 +109,13 @@ class SimpleChoresDueThisWeekSensor(SimpleChoresBaseSensor):
             coordinator,
             entry,
             "due_this_week",
-            "Chores Due This Week",
-            "mdi:calendar-week",
+            "Chores Due Next 7 Days",
+            "mdi:calendar-clock",
         )
 
     @property
     def native_value(self) -> int:
-        """Return the number of chores due this week."""
+        """Return the number of chores due in next 7 days."""
         if self.coordinator.data is None:
             return 0
         return self.coordinator.data.get("due_this_week_count", 0)
@@ -137,8 +137,8 @@ class SimpleChoresDueThisWeekSensor(SimpleChoresBaseSensor):
                 }
                 for c in chores
             ],
-            "week_start": self.coordinator.data.get("week_start"),
-            "week_end": self.coordinator.data.get("week_end"),
+            "period_start": self.coordinator.data.get("today"),
+            "period_end": self.coordinator.data.get("seven_days_from_today"),
         }
 
 

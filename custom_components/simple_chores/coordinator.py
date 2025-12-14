@@ -77,7 +77,8 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_update_data(self) -> dict[str, Any]:
         """Calculate due chores and prepare data for entities."""
         today = date.today()
-        week_start, week_end = get_week_bounds(today)
+        # Use rolling 7-day window instead of calendar week
+        next_seven_days = today + timedelta(days=7)
 
         # Get all rooms (HA Areas + custom) and clear cache
         self._room_name_cache = None  # Clear cache to ensure fresh data
@@ -110,7 +111,8 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             elif next_due == today:
                 due_today.append(chore_with_room)
 
-            if week_start <= next_due <= week_end and next_due > today:
+            # Due in next 7 days (rolling window, not calendar week)
+            if today < next_due <= next_seven_days:
                 due_this_week.append(chore_with_room)
 
             # Group by room
@@ -120,8 +122,7 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         result = {
             "today": today.isoformat(),
-            "week_start": week_start.isoformat(),
-            "week_end": week_end.isoformat(),
+            "seven_days_from_today": next_seven_days.isoformat(),
             "due_today": due_today,
             "due_today_count": len(due_today),
             "due_this_week": due_this_week,
