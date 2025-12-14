@@ -49,50 +49,143 @@ class SimpleChoresCard extends LitElement {
       hass: { type: Object },
       config: { type: Object },
       _selectedRoom: { type: String },
-      _showAddRoomModal: { type: Boolean },
-      _newRoomName: { type: String },
-      _newRoomIcon: { type: String },
-      _showManageRoomsModal: { type: Boolean },
-      _showAddChoreModal: { type: Boolean },
-      _newChoreName: { type: String },
-      _newChoreRoom: { type: String },
-      _newChoreFrequency: { type: String },
-      _newChoreDueDate: { type: String },
-      _newChoreAssignedTo: { type: String },
-      _showEditChoreModal: { type: Boolean },
-      _editChoreId: { type: String },
-      _editChoreName: { type: String },
-      _editChoreRoom: { type: String },
-      _editChoreFrequency: { type: String },
-      _editChoreDueDate: { type: String },
-      _editChoreAssignedTo: { type: String },
-      _showAllChoresModal: { type: Boolean },
-      _showHistoryModal: { type: Boolean },
+      // Modal system
+      _activeModal: { type: String },
+      _modalData: { type: Object },
+      // Form data unified under _formData
+      _formData: { type: Object },
     };
   }
 
   constructor() {
     super();
     this._selectedRoom = "all";
-    this._showAddRoomModal = false;
-    this._newRoomName = "";
-    this._newRoomIcon = "";
-    this._showManageRoomsModal = false;
-    this._showAddChoreModal = false;
-    this._newChoreName = "";
-    this._newChoreRoom = "";
-    this._newChoreFrequency = "daily";
-    this._newChoreDueDate = "";
-    this._newChoreAssignedTo = "";
-    this._showEditChoreModal = false;
-    this._editChoreId = "";
-    this._editChoreName = "";
-    this._editChoreRoom = "";
-    this._editChoreFrequency = "daily";
-    this._editChoreDueDate = "";
-    this._editChoreAssignedTo = "";
-    this._showAllChoresModal = false;
-    this._showHistoryModal = false;
+    // Modal system
+    this._activeModal = null;
+    this._modalData = {};
+    // Unified form data
+    this._formData = {};
+    this._initializeFormData();
+    // Performance caching
+    this._cache = {
+      rooms: { data: null, lastUpdate: 0, ttl: 30000 }, // 30 second TTL
+      users: { data: null, lastUpdate: 0, ttl: 60000 }, // 1 minute TTL
+      roomLookup: new Map() // Persistent room lookup cache
+    };
+  }
+
+  _initializeFormData() {
+    this._formData = {
+      room: {
+        name: "",
+        icon: "mdi:home"
+      },
+      chore: {
+        id: "",
+        name: "",
+        room: "",
+        frequency: "daily",
+        dueDate: "",
+        assignedTo: ""
+      }
+    };
+  }
+
+  // Universal form handler
+  _handleFormInput(formType, field, value) {
+    if (!this._formData[formType]) {
+      this._formData[formType] = {};
+    }
+    this._formData[formType][field] = value;
+    this.requestUpdate();
+  }
+
+  // Form validation utilities
+  _validateForm(formType, requiredFields = []) {
+    const formData = this._formData[formType];
+    if (!formData) return { valid: false, message: "Form data not found" };
+    
+    for (const field of requiredFields) {
+      const value = formData[field];
+      if (!value || (typeof value === 'string' && !value.trim())) {
+        return { valid: false, message: `${this._formatFieldName(field)} is required` };
+      }
+    }
+    return { valid: true };
+  }
+
+  _formatFieldName(field) {
+    return field.replace(/([A-Z])/g, ' $1').toLowerCase().replace(/^./, str => str.toUpperCase());
+  }
+
+  // Form reset utility
+  _resetForm(formType) {
+    if (formType === 'room') {
+      this._formData.room = { name: "", icon: "mdi:home" };
+    } else if (formType === 'chore') {
+      this._formData.chore = {
+        id: "",
+        name: "",
+        room: "",
+        frequency: "daily",
+        dueDate: "",
+        assignedTo: ""
+      };
+    }
+    this.requestUpdate();
+  }
+
+  // Cache management utilities
+  _isCacheValid(cacheKey) {
+    const cache = this._cache[cacheKey];
+    return cache.data !== null && (Date.now() - cache.lastUpdate) < cache.ttl;
+  }
+
+  _updateCache(cacheKey, data) {
+    this._cache[cacheKey] = {
+      ...this._cache[cacheKey],
+      data: data,
+      lastUpdate: Date.now()
+    };
+  }
+
+  _invalidateCache(cacheKey) {
+    if (this._cache[cacheKey]) {
+      this._cache[cacheKey].data = null;
+      this._cache[cacheKey].lastUpdate = 0;
+    }
+    // Also clear room lookup cache when rooms change
+    if (cacheKey === 'rooms') {
+      this._cache.roomLookup.clear();
+    }
+  }
+
+  // Consolidated room lookup logic
+  _resolveRoomName(chore, rooms = null) {
+    // Get rooms if not provided
+    if (!rooms) {
+      rooms = this._getRooms();
+    }
+
+    // Try different property names in order of preference
+    let roomName = chore.room_name || chore.room;
+    let roomId = chore.room_id || chore.room;
+
+    // If we have a valid room name and it's not a fallback, use it
+    if (roomName && roomName !== 'Unknown Room' && roomName !== 'Unknown') {
+      return roomName;
+    }
+
+    // Otherwise, try to resolve from room ID using cached lookup
+    if (roomId) {
+      const resolvedName = this._getRoomName(roomId, rooms);
+      if (resolvedName !== 'Unknown Room') {
+        return resolvedName;
+      }
+    }
+
+    // Final fallback
+    return 'Unknown Room';
   }
 
   static getStubConfig() {
@@ -222,17 +315,8 @@ class SimpleChoresCard extends LitElement {
       dueDate = new Date().toISOString().split('T')[0];
     }
     
-    // For room name, try multiple property names in order
-    let roomName = chore.room_name || chore.room || 'Unknown Room';
-    
-    // If we have room_id but no room_name, try to resolve it from rooms data
-    if ((!chore.room_name || chore.room_name === 'Unknown') && chore.room_id) {
-      const rooms = this._getRooms();
-      const matchingRoom = rooms.find(r => r.id === chore.room_id || r.name === chore.room_id);
-      if (matchingRoom) {
-        roomName = matchingRoom.name;
-      }
-    }
+    // Use consolidated room lookup logic
+    const roomName = this._resolveRoomName(chore);
     
     // Get assigned user info
     const assignedTo = chore.assigned_to;
@@ -334,6 +418,13 @@ class SimpleChoresCard extends LitElement {
   _getUsers() {
     if (!this.hass) return [];
     
+    // Check cache first
+    if (this._isCacheValid('users')) {
+      return this._cache.users.data;
+    }
+    
+    let users = [];
+    
     // Try to get users from sensor attributes first
     const possibleTotalSensors = [
       "sensor.simple_chores_total",
@@ -344,35 +435,45 @@ class SimpleChoresCard extends LitElement {
     for (const sensorName of possibleTotalSensors) {
       const sensor = this.hass.states[sensorName];
       if (sensor && sensor.attributes && sensor.attributes.users) {
-        return sensor.attributes.users;
+        users = sensor.attributes.users;
+        break;
       }
     }
     
     // Fallback to Home Assistant users from auth registry (if available)
-    // This is a basic fallback - actual users would need to be provided by the integration
-    const users = [];
-    
-    // Check if we can get users from HA's person entities  
-    Object.keys(this.hass.states).forEach(entityId => {
-      if (entityId.startsWith('person.')) {
-        const person = this.hass.states[entityId];
-        users.push({
-          id: entityId.replace('person.', ''),
-          name: person.attributes.friendly_name || person.attributes.id || entityId.replace('person.', '')
-        });
-      }
-    });
-    
-    if (users.length > 0) return users;
+    if (users.length === 0) {
+      // Check if we can get users from HA's person entities  
+      Object.keys(this.hass.states).forEach(entityId => {
+        if (entityId.startsWith('person.')) {
+          const person = this.hass.states[entityId];
+          users.push({
+            id: entityId.replace('person.', ''),
+            name: person.attributes.friendly_name || person.attributes.id || entityId.replace('person.', '')
+          });
+        }
+      });
+    }
     
     // Final fallback - basic user entries
-    return [
-      { id: 'user', name: 'Default User' }
-    ];
+    if (users.length === 0) {
+      users = [{ id: 'user', name: 'Default User' }];
+    }
+    
+    // Update cache
+    this._updateCache('users', users);
+    
+    return users;
   }
 
   _getRooms() {
     if (!this.hass) return [];
+    
+    // Check cache first
+    if (this._isCacheValid('rooms')) {
+      return this._cache.rooms.data;
+    }
+    
+    let rooms = [];
     
     // Debug: Check what sensors exist (check all possible naming patterns)
     const simpleChoreSensors = Object.keys(this.hass.states).filter(key => 
@@ -404,54 +505,66 @@ class SimpleChoresCard extends LitElement {
       // Check if calendar has room data in attributes
       if (calendar.attributes.rooms) {
         console.log("Simple Chores Card: Found rooms in calendar:", calendar.attributes.rooms);
-        return calendar.attributes.rooms;
+        rooms = calendar.attributes.rooms;
       }
     }
     
-    const allSensors = [...simpleChoreSensors, ...householdTaskSensors];
-    
-    // Try both possible sensor names for total sensor
-    const possibleTotalSensors = [
-      "sensor.total_chores",
-      "sensor.simple_chores_total",
-      "sensor.household_tasks_total"
-    ];
-    
-    for (const sensorName of possibleTotalSensors) {
-      const sensor = this.hass.states[sensorName];
-      console.log(`Simple Chores Card: Checking ${sensorName}:`, sensor);
+    if (rooms.length === 0) {
+      const allSensors = [...simpleChoreSensors, ...householdTaskSensors];
       
-      if (sensor) {
-        console.log(`Simple Chores Card: ${sensorName} attributes:`, sensor.attributes);
-        if (sensor.attributes && sensor.attributes.rooms) {
-          console.log(`Simple Chores Card: Found rooms in ${sensorName}:`, sensor.attributes.rooms);
-          return sensor.attributes.rooms;
+      // Try both possible sensor names for total sensor
+      const possibleTotalSensors = [
+        "sensor.total_chores",
+        "sensor.simple_chores_total",
+        "sensor.household_tasks_total"
+      ];
+      
+      for (const sensorName of possibleTotalSensors) {
+        const sensor = this.hass.states[sensorName];
+        console.log(`Simple Chores Card: Checking ${sensorName}:`, sensor);
+        
+        if (sensor) {
+          console.log(`Simple Chores Card: ${sensorName} attributes:`, sensor.attributes);
+          if (sensor.attributes && sensor.attributes.rooms) {
+            console.log(`Simple Chores Card: Found rooms in ${sensorName}:`, sensor.attributes.rooms);
+            rooms = sensor.attributes.rooms;
+            break;
+          }
+        }
+      }
+      
+      // Check each sensor for room data (fallback)
+      if (rooms.length === 0) {
+        for (const sensorName of allSensors) {
+          const sensor = this.hass.states[sensorName];
+          if (sensor && sensor.attributes) {
+            console.log(`Simple Chores Card: ${sensorName} attributes:`, sensor.attributes);
+            if (sensor.attributes.rooms) {
+              console.log(`Simple Chores Card: Found rooms in ${sensorName}:`, sensor.attributes.rooms);
+              rooms = sensor.attributes.rooms;
+              break;
+            }
+          }
         }
       }
     }
-    
-    // Check each sensor for room data (fallback)
-    for (const sensorName of allSensors) {
-      const sensor = this.hass.states[sensorName];
-      if (sensor && sensor.attributes) {
-        console.log(`Simple Chores Card: ${sensorName} attributes:`, sensor.attributes);
-        if (sensor.attributes.rooms) {
-          console.log(`Simple Chores Card: Found rooms in ${sensorName}:`, sensor.attributes.rooms);
-          return sensor.attributes.rooms;
-        }
-      }
-    }
-    
-    console.log("Simple Chores Card: No rooms found in any sensor, falling back to HA areas");
     
     // Fallback: Get just Home Assistant areas if sensor data not available
-    const areas = Object.values(this.hass.areas || {}).map(area => ({
-      id: `area_${area.area_id}`,  // Match the coordinator's room ID format
-      name: area.name || area.area_id
-    }));
+    if (rooms.length === 0) {
+      console.log("Simple Chores Card: No rooms found in any sensor, falling back to HA areas");
+      
+      rooms = Object.values(this.hass.areas || {}).map(area => ({
+        id: `area_${area.area_id}`,  // Match the coordinator's room ID format
+        name: area.name || area.area_id
+      }));
+      
+      console.log("Simple Chores Card: HA areas fallback:", rooms);
+    }
     
-    console.log("Simple Chores Card: HA areas fallback:", areas);
-    return areas;
+    // Update cache
+    this._updateCache('rooms', rooms);
+    
+    return rooms;
   }
 
   _filterChoresByRoom(chores) {
@@ -525,32 +638,31 @@ class SimpleChoresCard extends LitElement {
 
   _openAddRoomModal() {
     this._showAddRoomModal = true;
-    this._newRoomName = "";
-    this._newRoomIcon = "mdi:home";
+    this._resetForm('room');
   }
 
   _closeAddRoomModal() {
     this._showAddRoomModal = false;
-    this._newRoomName = "";
-    this._newRoomIcon = "";
+    this._resetForm('room');
   }
 
   _handleRoomNameInput(e) {
-    this._newRoomName = e.target.value;
+    this._handleFormInput('room', 'name', e.target.value);
   }
 
   _handleRoomIconInput(e) {
-    this._newRoomIcon = e.target.value;
+    this._handleFormInput('room', 'icon', e.target.value);
   }
 
   _submitAddRoom() {
-    if (!this._newRoomName.trim()) {
-      this._showToast("Room name is required");
+    const validation = this._validateForm('room', ['name']);
+    if (!validation.valid) {
+      this._showToast(validation.message);
       return;
     }
 
     // Check for duplicate room names
-    const roomName = this._newRoomName.trim();
+    const roomName = this._formData.room.name.trim();
     const existingRooms = this._getRooms();
     
     console.log("Simple Chores Card: Current rooms:", existingRooms);
@@ -567,12 +679,12 @@ class SimpleChoresCard extends LitElement {
 
     console.log("Simple Chores Card: Calling add_room service with:", {
       name: roomName,
-      icon: this._newRoomIcon || "mdi:home"
+      icon: this._formData.room.icon || "mdi:home"
     });
 
     this.hass.callService("simple_chores", "add_room", {
       name: roomName,
-      icon: this._newRoomIcon || "mdi:home"
+      icon: this._formData.room.icon || "mdi:home"
     }).then((result) => {
       console.log("Simple Chores Card: Service call succeeded:", result);
       
@@ -604,6 +716,9 @@ class SimpleChoresCard extends LitElement {
       };
       
       checkForRoom();
+      
+      // Invalidate room cache since we added a new room
+      this._invalidateCache('rooms');
     }).catch(error => {
       console.error("Simple Chores Card: Service call failed:", error);
       this._showToast(`Error creating room: ${error.message}`);
@@ -630,7 +745,7 @@ class SimpleChoresCard extends LitElement {
               <input 
                 id="room-name"
                 type="text" 
-                .value=${this._newRoomName}
+                .value=${this._formData.room.name}
                 @input=${this._handleRoomNameInput}
                 placeholder="Enter room name..."
                 maxlength="50"
@@ -641,7 +756,7 @@ class SimpleChoresCard extends LitElement {
               <input 
                 id="room-icon"
                 type="text" 
-                .value=${this._newRoomIcon}
+                .value=${this._formData.room.icon}
                 @input=${this._handleRoomIconInput}
                 placeholder="mdi:home"
               />
@@ -650,7 +765,7 @@ class SimpleChoresCard extends LitElement {
           </div>
           <div class="modal-footer">
             <button class="cancel-btn" @click=${this._closeAddRoomModal}>Cancel</button>
-            <button class="submit-btn" @click=${this._submitAddRoom} ?disabled=${!this._newRoomName.trim()}>
+            <button class="submit-btn" @click=${this._submitAddRoom} ?disabled=${!this._formData.room.name?.trim()}>
               Create Room
             </button>
           </div>
@@ -678,6 +793,8 @@ class SimpleChoresCard extends LitElement {
       });
       
       this._showToast(`Room "${roomName}" deleted successfully!`);
+      // Invalidate room cache since we deleted a room
+      this._invalidateCache('rooms');
       this.requestUpdate();
     } catch (error) {
       console.error("Simple Chores Card: Failed to delete room:", error);
@@ -735,40 +852,32 @@ class SimpleChoresCard extends LitElement {
 
   _openAddChoreModal() {
     this._showAddChoreModal = true;
-    this._newChoreName = "";
-    this._newChoreRoom = "";
-    this._newChoreFrequency = "daily";
-    this._newChoreDueDate = "";
-    this._newChoreAssignedTo = "";
+    this._resetForm('chore');
   }
 
   _closeAddChoreModal() {
     this._showAddChoreModal = false;
-    this._newChoreName = "";
-    this._newChoreRoom = "";
-    this._newChoreFrequency = "daily";
-    this._newChoreDueDate = "";
-    this._newChoreAssignedTo = "";
+    this._resetForm('chore');
   }
 
   _handleChoreNameInput(e) {
-    this._newChoreName = e.target.value;
+    this._handleFormInput('chore', 'name', e.target.value);
   }
 
   _handleChoreRoomInput(e) {
-    this._newChoreRoom = e.target.value;
+    this._handleFormInput('chore', 'room', e.target.value);
   }
 
   _handleChoreFrequencyInput(e) {
-    this._newChoreFrequency = e.target.value;
+    this._handleFormInput('chore', 'frequency', e.target.value);
   }
 
   _handleChoreDueDateInput(e) {
-    this._newChoreDueDate = e.target.value;
+    this._handleFormInput('chore', 'dueDate', e.target.value);
   }
 
   _handleChoreAssignedToInput(e) {
-    this._newChoreAssignedTo = e.target.value;
+    this._handleFormInput('chore', 'assignedTo', e.target.value);
   }
 
 
@@ -794,7 +903,7 @@ class SimpleChoresCard extends LitElement {
               <input 
                 id="chore-name"
                 type="text" 
-                .value=${this._newChoreName}
+                .value=${this._formData.chore.name}
                 @input=${this._handleChoreNameInput}
                 placeholder="Enter chore name..."
                 maxlength="100"
@@ -804,7 +913,7 @@ class SimpleChoresCard extends LitElement {
               <label for="chore-room">Room *</label>
               <select 
                 id="chore-room"
-                .value=${this._newChoreRoom}
+                .value=${this._formData.chore.room}
                 @change=${this._handleChoreRoomInput}
               >
                 <option value="">Select a room...</option>
@@ -819,7 +928,7 @@ class SimpleChoresCard extends LitElement {
               <label for="chore-frequency">Frequency *</label>
               <select 
                 id="chore-frequency"
-                .value=${this._newChoreFrequency}
+                .value=${this._formData.chore.frequency}
                 @change=${this._handleChoreFrequencyInput}
               >
                 <option value="daily">Daily</option>
@@ -834,7 +943,7 @@ class SimpleChoresCard extends LitElement {
               <input 
                 id="chore-due-date"
                 type="date" 
-                .value=${this._newChoreDueDate}
+                .value=${this._formData.chore.dueDate}
                 @input=${this._handleChoreDueDateInput}
                 title="Leave empty to start today"
               />
@@ -844,7 +953,7 @@ class SimpleChoresCard extends LitElement {
               <label for="chore-assigned-to">Assigned To (optional)</label>
               <select 
                 id="chore-assigned-to"
-                .value=${this._newChoreAssignedTo}
+                .value=${this._formData.chore.assignedTo}
                 @change=${this._handleChoreAssignedToInput}
               >
                 <option value="">No assignment (anyone can complete)</option>
@@ -860,7 +969,7 @@ class SimpleChoresCard extends LitElement {
           <div class="modal-footer">
             <button class="cancel-btn" @click=${this._closeAddChoreModal}>Cancel</button>
             <button class="submit-btn" @click=${this._submitAddChore} 
-                    ?disabled=${!this._newChoreName.trim() || !this._newChoreRoom.trim()}>
+                    ?disabled=${!this._formData.chore.name?.trim() || !this._formData.chore.room?.trim()}>
               Create Chore
             </button>
           </div>
@@ -873,22 +982,16 @@ class SimpleChoresCard extends LitElement {
     console.debug("Simple Chores Card: Editing chore:", chore);
     
     // Open edit modal with chore data
-    this._editChoreId = chore.id;
-    this._editChoreName = chore.name;
+    this._formData.chore = {
+      id: chore.id,
+      name: chore.name,
+      room: chore.room_id || chore.room || "",
+      frequency: chore.frequency || "daily",
+      dueDate: chore.next_due || chore.due_date || "",
+      assignedTo: chore.assigned_to || ""
+    };
     
-    // Handle different property names for room_id
-    this._editChoreRoom = chore.room_id || chore.room || "";
-    this._editChoreFrequency = chore.frequency || "daily";
-    
-    // Handle different property names for due date
-    this._editChoreDueDate = chore.next_due || chore.due_date || "";
-    
-    // Handle assigned user
-    this._editChoreAssignedTo = chore.assigned_to || "";
-    
-    console.debug("Simple Chores Card: Set edit room to:", this._editChoreRoom);
-    console.debug("Simple Chores Card: Set edit due date to:", this._editChoreDueDate);
-    console.debug("Simple Chores Card: Set edit assigned to:", this._editChoreAssignedTo);
+    console.debug("Simple Chores Card: Set edit data:", this._formData.chore);
     
     // Force a re-render with the new data before showing the modal
     this.requestUpdate().then(() => {
@@ -897,7 +1000,7 @@ class SimpleChoresCard extends LitElement {
       setTimeout(() => {
         const roomSelect = this.shadowRoot?.querySelector('#edit-chore-room');
         if (roomSelect) {
-          roomSelect.value = this._editChoreRoom;
+          roomSelect.value = this._formData.chore.room;
           console.debug("Simple Chores Card: Manually set room select value:", roomSelect.value);
         }
       }, 100);
@@ -906,59 +1009,51 @@ class SimpleChoresCard extends LitElement {
 
   _closeEditChoreModal() {
     this._showEditChoreModal = false;
-    this._editChoreId = "";
-    this._editChoreName = "";
-    this._editChoreRoom = "";
-    this._editChoreFrequency = "daily";
-    this._editChoreDueDate = "";
-    this._editChoreAssignedTo = "";
+    this._resetForm('chore');
   }
 
   _handleEditChoreNameInput(e) {
-    this._editChoreName = e.target.value;
+    this._handleFormInput('chore', 'name', e.target.value);
   }
 
   _handleEditChoreRoomInput(e) {
-    this._editChoreRoom = e.target.value;
+    this._handleFormInput('chore', 'room', e.target.value);
   }
 
   _handleEditChoreFrequencyInput(e) {
-    this._editChoreFrequency = e.target.value;
+    this._handleFormInput('chore', 'frequency', e.target.value);
   }
 
   _handleEditChoreDueDateInput(e) {
-    this._editChoreDueDate = e.target.value;
+    this._handleFormInput('chore', 'dueDate', e.target.value);
   }
 
   _handleEditChoreAssignedToInput(e) {
-    this._editChoreAssignedTo = e.target.value;
+    this._handleFormInput('chore', 'assignedTo', e.target.value);
   }
 
   _submitEditChore() {
-    if (!this._editChoreName.trim()) {
-      this._showToast("Chore name is required");
+    const validation = this._validateForm('chore', ['name', 'room']);
+    if (!validation.valid) {
+      this._showToast(validation.message);
       return;
     }
 
-    if (!this._editChoreRoom.trim()) {
-      this._showToast("Please select a room");
-      return;
-    }
-
+    const choreData = this._formData.chore;
     const serviceData = {
-      chore_id: this._editChoreId,
-      name: this._editChoreName.trim(),
-      room_id: this._editChoreRoom,
-      frequency: this._editChoreFrequency
+      chore_id: choreData.id,
+      name: choreData.name.trim(),
+      room_id: choreData.room,
+      frequency: choreData.frequency
     };
     
     // Only include next_due if a date is provided
-    if (this._editChoreDueDate.trim()) {
-      serviceData.next_due = this._editChoreDueDate;
+    if (choreData.dueDate?.trim()) {
+      serviceData.next_due = choreData.dueDate;
     }
 
     this.hass.callService("simple_chores", "update_chore", serviceData).then(() => {
-      this._showToast(`Chore "${this._editChoreName}" updated successfully!`);
+      this._showToast(`Chore "${choreData.name}" updated successfully!`);
       this._closeEditChoreModal();
       this.requestUpdate();
     }).catch(error => {
@@ -988,7 +1083,7 @@ class SimpleChoresCard extends LitElement {
               <input 
                 id="edit-chore-name"
                 type="text" 
-                .value=${this._editChoreName}
+                .value=${this._formData.chore.name}
                 @input=${this._handleEditChoreNameInput}
                 placeholder="Enter chore name..."
                 maxlength="100"
@@ -998,7 +1093,7 @@ class SimpleChoresCard extends LitElement {
               <label for="edit-chore-room">Room *</label>
               <select 
                 id="edit-chore-room"
-                .value=${this._editChoreRoom}
+                .value=${this._formData.chore.room}
                 @change=${this._handleEditChoreRoomInput}
               >
                 <option value="">Select a room...</option>
@@ -1013,7 +1108,7 @@ class SimpleChoresCard extends LitElement {
               <label for="edit-chore-frequency">Frequency *</label>
               <select 
                 id="edit-chore-frequency"
-                .value=${this._editChoreFrequency}
+                .value=${this._formData.chore.frequency}
                 @change=${this._handleEditChoreFrequencyInput}
               >
                 <option value="daily">Daily</option>
@@ -1028,7 +1123,7 @@ class SimpleChoresCard extends LitElement {
               <input 
                 id="edit-chore-due-date"
                 type="date" 
-                .value=${this._editChoreDueDate}
+                .value=${this._formData.chore.dueDate}
                 @input=${this._handleEditChoreDueDateInput}
               />
             </div>
@@ -1036,7 +1131,7 @@ class SimpleChoresCard extends LitElement {
               <label for="edit-chore-assigned-to">Assigned To (optional)</label>
               <select 
                 id="edit-chore-assigned-to"
-                .value=${this._editChoreAssignedTo}
+                .value=${this._formData.chore.assignedTo}
                 @change=${this._handleEditChoreAssignedToInput}
               >
                 <option value="">No assignment (anyone can complete)</option>
@@ -1052,7 +1147,7 @@ class SimpleChoresCard extends LitElement {
           <div class="modal-footer">
             <button class="cancel-btn" @click=${this._closeEditChoreModal}>Cancel</button>
             <button class="submit-btn" @click=${this._submitEditChore} 
-                    ?disabled=${!this._editChoreName.trim() || !this._editChoreRoom.trim()}>
+                    ?disabled=${!this._formData.chore.name?.trim() || !this._formData.chore.room?.trim()}>
               Update Chore
             </button>
           </div>
@@ -1135,16 +1230,8 @@ class SimpleChoresCard extends LitElement {
                 ${allChores.map(chore => {
                   const dueDate = chore.next_due || chore.due_date;
                   
-                  // Use the same room lookup logic as the main card
-                  let roomName = chore.room_name || chore.room || 'Unknown Room';
-                  
-                  // If we have room_id but no room_name, try to resolve it from rooms data
-                  if ((!chore.room_name || chore.room_name === 'Unknown') && chore.room_id) {
-                    const matchingRoom = rooms.find(r => r.id === chore.room_id || r.name === chore.room_id);
-                    if (matchingRoom) {
-                      roomName = matchingRoom.name;
-                    }
-                  }
+                  // Use consolidated room lookup logic
+                  const roomName = this._resolveRoomName(chore, rooms);
                   
                   // Get assigned user info
                   const assignedTo = chore.assigned_to;
@@ -1215,8 +1302,18 @@ class SimpleChoresCard extends LitElement {
   }
 
   _getRoomName(roomId, rooms) {
+    // Use cache for frequent lookups
+    if (this._cache.roomLookup.has(roomId)) {
+      return this._cache.roomLookup.get(roomId);
+    }
+    
     const room = rooms.find(r => r.id === roomId);
-    return room ? room.name : 'Unknown Room';
+    const roomName = room ? room.name : 'Unknown Room';
+    
+    // Cache the result
+    this._cache.roomLookup.set(roomId, roomName);
+    
+    return roomName;
   }
 
   // Modal action methods that close the all chores modal before performing actions
@@ -1224,20 +1321,16 @@ class SimpleChoresCard extends LitElement {
     console.log("Simple Chores Card: Edit chore from modal:", chore);
     
     // First populate the edit modal data
-    this._editChoreId = chore.id;
-    this._editChoreName = chore.name;
+    this._formData.chore = {
+      id: chore.id,
+      name: chore.name,
+      room: chore.room_id || chore.room || "",
+      frequency: chore.frequency || "daily",
+      dueDate: chore.next_due || chore.due_date || "",
+      assignedTo: chore.assigned_to || ""
+    };
     
-    // Handle different property names for room_id
-    this._editChoreRoom = chore.room_id || chore.room || "";
-    this._editChoreFrequency = chore.frequency || "daily";
-    
-    // Handle different property names for due date
-    this._editChoreDueDate = chore.next_due || chore.due_date || "";
-    
-    // Handle assigned user
-    this._editChoreAssignedTo = chore.assigned_to || "";
-    
-    console.log("Simple Chores Card: Set edit data - room:", this._editChoreRoom, "due:", this._editChoreDueDate, "assigned:", this._editChoreAssignedTo);
+    console.log("Simple Chores Card: Set edit data:", this._formData.chore);
     
     // Direct modal swap - close one and open the other simultaneously
     this._showAllChoresModal = false;
@@ -1397,26 +1490,28 @@ class SimpleChoresCard extends LitElement {
 
   // Service calling methods
   async _submitAddChore() {
-    if (!this._newChoreName.trim() || !this._newChoreRoom.trim()) {
-      this._showToast("Please fill in all required fields");
+    const validation = this._validateForm('chore', ['name', 'room']);
+    if (!validation.valid) {
+      this._showToast(validation.message);
       return;
     }
 
     try {
+      const choreData = this._formData.chore;
       const serviceData = {
-        name: this._newChoreName.trim(),
-        room_id: this._newChoreRoom.trim(),
-        frequency: this._newChoreFrequency
+        name: choreData.name.trim(),
+        room_id: choreData.room.trim(),
+        frequency: choreData.frequency
       };
 
       // Add due date if provided
-      if (this._newChoreDueDate.trim()) {
-        serviceData.start_date = this._newChoreDueDate.trim();
+      if (choreData.dueDate?.trim()) {
+        serviceData.start_date = choreData.dueDate.trim();
       }
 
       // Add assigned_to if provided
-      if (this._newChoreAssignedTo.trim()) {
-        serviceData.assigned_to = this._newChoreAssignedTo.trim();
+      if (choreData.assignedTo?.trim()) {
+        serviceData.assigned_to = choreData.assignedTo.trim();
       }
 
       await this.hass.callService("simple_chores", "add_chore", serviceData);
@@ -1429,27 +1524,29 @@ class SimpleChoresCard extends LitElement {
   }
 
   async _submitEditChore() {
-    if (!this._editChoreName.trim() || !this._editChoreRoom.trim()) {
-      this._showToast("Please fill in all required fields");
+    const validation = this._validateForm('chore', ['name', 'room']);
+    if (!validation.valid) {
+      this._showToast(validation.message);
       return;
     }
 
     try {
+      const choreData = this._formData.chore;
       const serviceData = {
-        chore_id: this._editChoreId,
-        name: this._editChoreName.trim(),
-        room_id: this._editChoreRoom.trim(),
-        frequency: this._editChoreFrequency
+        chore_id: choreData.id,
+        name: choreData.name.trim(),
+        room_id: choreData.room.trim(),
+        frequency: choreData.frequency
       };
 
       // Add due date if provided
-      if (this._editChoreDueDate.trim()) {
-        serviceData.next_due = this._editChoreDueDate.trim();
+      if (choreData.dueDate?.trim()) {
+        serviceData.next_due = choreData.dueDate.trim();
       }
 
       // Add assigned_to if provided
-      if (this._editChoreAssignedTo.trim()) {
-        serviceData.assigned_to = this._editChoreAssignedTo.trim();
+      if (choreData.assignedTo?.trim()) {
+        serviceData.assigned_to = choreData.assignedTo.trim();
       }
 
       await this.hass.callService("simple_chores", "update_chore", serviceData);

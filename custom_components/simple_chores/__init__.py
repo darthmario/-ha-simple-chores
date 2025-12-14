@@ -185,119 +185,111 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
     await hass.config_entries.async_reload(entry.entry_id)
 
 
+class ServiceHandlerFactory:
+    """Factory for creating service handlers with common patterns."""
+    
+    def __init__(self, coordinator: SimpleChoresCoordinator, hass: HomeAssistant):
+        self.coordinator = coordinator
+        self.hass = hass
+    
+    def create_room_handler(self, operation: str):
+        """Create a room operation handler."""
+        async def handler(call: ServiceCall) -> None:
+            room_id = call.data.get(ATTR_ROOM_ID)
+            name = call.data.get(ATTR_ROOM_NAME)
+            icon = call.data.get(ATTR_ICON)
+            
+            if operation == "add":
+                await self.coordinator.async_add_room(name, icon)
+            elif operation == "remove":
+                await self.coordinator.async_remove_room(room_id)
+            elif operation == "update":
+                await self.coordinator.async_update_room(room_id, name, icon)
+        
+        return handler
+    
+    def create_chore_handler(self, operation: str):
+        """Create a chore operation handler."""
+        async def handler(call: ServiceCall) -> None:
+            chore_id = call.data.get(ATTR_CHORE_ID)
+            name = call.data.get(ATTR_CHORE_NAME)
+            room_id = call.data.get(ATTR_ROOM_ID)
+            frequency = call.data.get(ATTR_FREQUENCY)
+            start_date = call.data.get(ATTR_START_DATE)
+            next_due = call.data.get(ATTR_NEXT_DUE)
+            assigned_to = call.data.get(ATTR_ASSIGNED_TO)
+            
+            if operation == "add":
+                await self.coordinator.async_add_chore(name, room_id, frequency, start_date, assigned_to)
+            elif operation == "remove":
+                await self.coordinator.async_remove_chore(chore_id)
+            elif operation == "update":
+                await self.coordinator.async_update_chore(chore_id, name, room_id, frequency, next_due, assigned_to)
+            elif operation == "complete":
+                user_id = call.data.get(ATTR_USER_ID)
+                if user_id is None and call.context.user_id:
+                    user_id = call.context.user_id
+                await self.coordinator.async_complete_chore(chore_id, user_id)
+            elif operation == "skip":
+                await self.coordinator.async_skip_chore(chore_id)
+        
+        return handler
+    
+    def create_data_handler(self, data_type: str):
+        """Create a data retrieval handler."""
+        async def handler(call: ServiceCall) -> dict[str, Any]:
+            if data_type == "history":
+                chore_id = call.data[ATTR_CHORE_ID]
+                history = self.coordinator.store.get_chore_history(chore_id)
+                return {"history": history}
+            elif data_type == "stats":
+                stats = self.coordinator.store.get_user_stats()
+                return {"stats": stats}
+        
+        return handler
+    
+    def create_notification_handler(self):
+        """Create notification handler."""
+        async def handler(call: ServiceCall) -> None:
+            await _async_send_due_notification(self.hass, self.coordinator)
+        
+        return handler
+
+
 async def _async_setup_services(
     hass: HomeAssistant, coordinator: SimpleChoresCoordinator
 ) -> None:
-    """Set up services for the integration."""
-
-    async def handle_add_room(call: ServiceCall) -> None:
-        """Handle add_room service call."""
-        name = call.data[ATTR_ROOM_NAME]
-        icon = call.data.get(ATTR_ICON)
-        await coordinator.async_add_room(name, icon)
-
-    async def handle_remove_room(call: ServiceCall) -> None:
-        """Handle remove_room service call."""
-        room_id = call.data[ATTR_ROOM_ID]
-        await coordinator.async_remove_room(room_id)
-
-    async def handle_update_room(call: ServiceCall) -> None:
-        """Handle update_room service call."""
-        room_id = call.data[ATTR_ROOM_ID]
-        name = call.data.get(ATTR_ROOM_NAME)
-        icon = call.data.get(ATTR_ICON)
-        await coordinator.async_update_room(room_id, name, icon)
-
-    async def handle_add_chore(call: ServiceCall) -> None:
-        """Handle add_chore service call."""
-        name = call.data[ATTR_CHORE_NAME]
-        room_id = call.data[ATTR_ROOM_ID]
-        frequency = call.data[ATTR_FREQUENCY]
-        start_date = call.data.get(ATTR_START_DATE)
-        assigned_to = call.data.get(ATTR_ASSIGNED_TO)
-        await coordinator.async_add_chore(name, room_id, frequency, start_date, assigned_to)
-
-    async def handle_remove_chore(call: ServiceCall) -> None:
-        """Handle remove_chore service call."""
-        chore_id = call.data[ATTR_CHORE_ID]
-        await coordinator.async_remove_chore(chore_id)
-
-    async def handle_update_chore(call: ServiceCall) -> None:
-        """Handle update_chore service call."""
-        chore_id = call.data[ATTR_CHORE_ID]
-        name = call.data.get(ATTR_CHORE_NAME)
-        room_id = call.data.get(ATTR_ROOM_ID)
-        frequency = call.data.get(ATTR_FREQUENCY)
-        next_due = call.data.get(ATTR_NEXT_DUE)
-        assigned_to = call.data.get(ATTR_ASSIGNED_TO)
-        await coordinator.async_update_chore(chore_id, name, room_id, frequency, next_due, assigned_to)
-
-    async def handle_complete_chore(call: ServiceCall) -> None:
-        """Handle complete_chore service call."""
-        chore_id = call.data[ATTR_CHORE_ID]
-        # Get user ID from service call context or override
-        user_id = call.data.get(ATTR_USER_ID)
-        if user_id is None and call.context.user_id:
-            user_id = call.context.user_id
-        await coordinator.async_complete_chore(chore_id, user_id)
-
-    async def handle_skip_chore(call: ServiceCall) -> None:
-        """Handle skip_chore service call."""
-        chore_id = call.data[ATTR_CHORE_ID]
-        await coordinator.async_skip_chore(chore_id)
-
-    async def handle_get_history(call: ServiceCall) -> dict[str, Any]:
-        """Handle get_history service call."""
-        chore_id = call.data[ATTR_CHORE_ID]
-        history = coordinator.store.get_chore_history(chore_id)
-        return {"history": history}
-
-    async def handle_get_user_stats(call: ServiceCall) -> dict[str, Any]:
-        """Handle get_user_stats service call."""
-        stats = coordinator.store.get_user_stats()
-        return {"stats": stats}
-
-    async def handle_send_notification(call: ServiceCall) -> None:
-        """Handle send_due_notification service call."""
-        await _async_send_due_notification(hass, coordinator)
-
-    # Register all services
-    hass.services.async_register(
-        DOMAIN, SERVICE_ADD_ROOM, handle_add_room, schema=SERVICE_ADD_ROOM_SCHEMA
-    )
-    hass.services.async_register(
-        DOMAIN, SERVICE_REMOVE_ROOM, handle_remove_room, schema=SERVICE_REMOVE_ROOM_SCHEMA
-    )
-    hass.services.async_register(
-        DOMAIN, SERVICE_UPDATE_ROOM, handle_update_room, schema=SERVICE_UPDATE_ROOM_SCHEMA
-    )
-    hass.services.async_register(
-        DOMAIN, SERVICE_ADD_CHORE, handle_add_chore, schema=SERVICE_ADD_CHORE_SCHEMA
-    )
-    hass.services.async_register(
-        DOMAIN, SERVICE_REMOVE_CHORE, handle_remove_chore, schema=SERVICE_REMOVE_CHORE_SCHEMA
-    )
-    hass.services.async_register(
-        DOMAIN, SERVICE_UPDATE_CHORE, handle_update_chore, schema=SERVICE_UPDATE_CHORE_SCHEMA
-    )
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_COMPLETE_CHORE,
-        handle_complete_chore,
-        schema=SERVICE_COMPLETE_CHORE_SCHEMA,
-    )
-    hass.services.async_register(
-        DOMAIN, SERVICE_SKIP_CHORE, handle_skip_chore, schema=SERVICE_SKIP_CHORE_SCHEMA
-    )
-    hass.services.async_register(
-        DOMAIN, SERVICE_GET_HISTORY, handle_get_history, schema=SERVICE_GET_HISTORY_SCHEMA
-    )
-    hass.services.async_register(
-        DOMAIN, SERVICE_GET_USER_STATS, handle_get_user_stats
-    )
-    hass.services.async_register(
-        DOMAIN, SERVICE_SEND_NOTIFICATION, handle_send_notification
-    )
+    """Set up services for the integration using factory pattern."""
+    
+    factory = ServiceHandlerFactory(coordinator, hass)
+    
+    # Service configuration: (service_name, handler_factory_method, schema)
+    service_configs = [
+        # Room services
+        (SERVICE_ADD_ROOM, factory.create_room_handler("add"), SERVICE_ADD_ROOM_SCHEMA),
+        (SERVICE_REMOVE_ROOM, factory.create_room_handler("remove"), SERVICE_REMOVE_ROOM_SCHEMA),
+        (SERVICE_UPDATE_ROOM, factory.create_room_handler("update"), SERVICE_UPDATE_ROOM_SCHEMA),
+        
+        # Chore services
+        (SERVICE_ADD_CHORE, factory.create_chore_handler("add"), SERVICE_ADD_CHORE_SCHEMA),
+        (SERVICE_REMOVE_CHORE, factory.create_chore_handler("remove"), SERVICE_REMOVE_CHORE_SCHEMA),
+        (SERVICE_UPDATE_CHORE, factory.create_chore_handler("update"), SERVICE_UPDATE_CHORE_SCHEMA),
+        (SERVICE_COMPLETE_CHORE, factory.create_chore_handler("complete"), SERVICE_COMPLETE_CHORE_SCHEMA),
+        (SERVICE_SKIP_CHORE, factory.create_chore_handler("skip"), SERVICE_SKIP_CHORE_SCHEMA),
+        
+        # Data services
+        (SERVICE_GET_HISTORY, factory.create_data_handler("history"), SERVICE_GET_HISTORY_SCHEMA),
+        (SERVICE_GET_USER_STATS, factory.create_data_handler("stats"), None),
+        
+        # Notification service
+        (SERVICE_SEND_NOTIFICATION, factory.create_notification_handler(), None),
+    ]
+    
+    # Register all services using the factory pattern
+    for service_name, handler, schema in service_configs:
+        hass.services.async_register(
+            DOMAIN, service_name, handler, schema=schema
+        )
 
 
 async def _async_setup_notification_scheduler(
