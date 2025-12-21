@@ -62,6 +62,8 @@ class SimpleChoresCard extends LitElement {
       _showCompleteChoreModal: { type: Boolean },
       // Form data unified under _formData
       _formData: { type: Object },
+      // History data cache
+      _historyData: { type: Array },
     };
   }
 
@@ -82,6 +84,8 @@ class SimpleChoresCard extends LitElement {
     // Unified form data
     this._formData = {};
     this._initializeFormData();
+    // History data cache
+    this._historyData = [];
     // Performance caching
     this._cache = {
       rooms: { data: null, lastUpdate: 0, ttl: 30000 }, // 30 second TTL
@@ -1790,7 +1794,14 @@ class SimpleChoresCard extends LitElement {
     }
   }
 
-  _openHistoryModal() {
+  async _openHistoryModal() {
+    // Load history data before showing modal
+    try {
+      this._historyData = await this._getCompletionHistory();
+    } catch (error) {
+      console.error("Simple Chores Card: Error loading history:", error);
+      this._historyData = [];
+    }
     this._showHistoryModal = true;
   }
 
@@ -1798,18 +1809,12 @@ class SimpleChoresCard extends LitElement {
     this._showHistoryModal = false;
   }
 
-  async _renderHistoryModal() {
+  _renderHistoryModal() {
     if (!this._showHistoryModal) {
       return html``;
     }
 
-    let history;
-    try {
-      history = await this._getCompletionHistory();
-    } catch (error) {
-      console.error("Simple Chores Card: Error loading history:", error);
-      history = [];
-    }
+    const history = this._historyData || [];
 
     return html`
       <div class="modal-overlay" @click=${this._closeHistoryModal}>
@@ -1832,7 +1837,7 @@ class SimpleChoresCard extends LitElement {
                   const completedDate = new Date(entry.completed_at);
                   const formattedDate = completedDate.toLocaleDateString();
                   const formattedTime = completedDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                  
+
                   return html`
                     <div class="history-item">
                       <div class="history-info">
