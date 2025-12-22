@@ -1814,20 +1814,26 @@ class SimpleChoresCard extends LitElement {
 
   async _getCompletionHistory() {
     try {
-      // Try to get completion history from the total_chores sensor
-      const totalChoresSensor = this.hass.states["sensor.simple_chores_total"];
-      
-      if (totalChoresSensor && totalChoresSensor.attributes && totalChoresSensor.attributes.completion_history) {
-        const history = totalChoresSensor.attributes.completion_history;
-    // Debug logging removed
-        
-        // Sort by completion date (newest first)
-        return history.sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
+      // Try multiple possible sensor names
+      const possibleTotalSensors = [
+        "sensor.total_chores",
+        "sensor.simple_chores_total",
+        "sensor.household_tasks_total"
+      ];
+
+      for (const sensorName of possibleTotalSensors) {
+        const totalChoresSensor = this.hass.states[sensorName];
+
+        if (totalChoresSensor && totalChoresSensor.attributes && totalChoresSensor.attributes.completion_history) {
+          const history = totalChoresSensor.attributes.completion_history;
+
+          // Sort by completion date (newest first)
+          return history.sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
+        }
       }
-      
-    // Debug logging removed
+
       return [];
-      
+
     } catch (error) {
       console.error("Simple Chores Card: Failed to get completion history:", error);
       this._showToast("Error loading completion history");

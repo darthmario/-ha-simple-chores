@@ -173,9 +173,8 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self, room_id: str, all_rooms: list[dict[str, Any]]
     ) -> str:
         """Get the display name for a room."""
-        # Create efficient lookup cache if not already cached
-        if not hasattr(self, '_room_name_cache') or self._room_name_cache is None:
-            self._room_name_cache = {room["id"]: room["name"] for room in all_rooms}
+        # Rebuild cache from provided all_rooms to ensure accuracy
+        self._room_name_cache = {room["id"]: room["name"] for room in all_rooms}
         return self._room_name_cache.get(room_id, "Unknown Room")
 
     async def async_get_users(self) -> list[dict[str, Any]]:
