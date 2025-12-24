@@ -73,6 +73,7 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.store = store
         self.config_entry = config_entry
+        self._room_name_cache: dict[str, str] | None = {}
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Calculate due chores and prepare data for entities."""
