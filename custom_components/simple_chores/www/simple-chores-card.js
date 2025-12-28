@@ -3337,18 +3337,31 @@ initCard();
 
 // Wait for customCards to be available and register
 (function() {
+  let registered = false;
+
   const registerCard = () => {
+    // Prevent duplicate registration
+    if (registered) {
+      console.warn("Simple Chores Card: Already registered for picker, skipping");
+      return;
+    }
+
     // Register with custom card picker - this makes it show up in the visual picker
     window.customCards = window.customCards || [];
-    window.customCards.push({
-      type: "simple-chores-card",
-      name: "Simple Chores Card", 
-      description: "Manage household chores with room organization and completion tracking",
-      preview: true, // This enables preview in card picker
-      documentationURL: "https://github.com/darthmario/simple-chores",
-    });
 
-    // Also register in the legacy format for broader compatibility  
+    // Check if already in the array
+    const alreadyRegistered = window.customCards.some(card => card.type === "simple-chores-card");
+    if (!alreadyRegistered) {
+      window.customCards.push({
+        type: "simple-chores-card",
+        name: "Simple Chores Card",
+        description: "Manage household chores with room organization and completion tracking",
+        preview: true, // This enables preview in card picker
+        documentationURL: "https://github.com/darthmario/simple-chores",
+      });
+    }
+
+    // Also register in the legacy format for broader compatibility
     if (!window.customCardsRegistry) {
       window.customCardsRegistry = {};
     }
@@ -3367,6 +3380,7 @@ initCard();
       });
     }
 
+    registered = true;
     console.info("Simple Chores Card registered for visual picker");
   };
 

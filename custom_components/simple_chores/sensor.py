@@ -239,6 +239,7 @@ class SimpleChoresTotalSensor(SimpleChoresBaseSensor):
                     "last_completed": c.get("last_completed"),
                     "last_completed_by": c.get("last_completed_by"),
                     "created_at": c.get("created_at"),
+                    "assigned_to": c.get("assigned_to"),
                 }
                 for c in all_chores
             ],
@@ -248,5 +249,6 @@ class SimpleChoresTotalSensor(SimpleChoresBaseSensor):
                 {"id": r["id"], "name": r["name"], "is_custom": r.get("is_custom", False)}
                 for r in self.coordinator.data.get("rooms", [])
             ],
+            "users": self.coordinator.data.get("users", []),
         }
 

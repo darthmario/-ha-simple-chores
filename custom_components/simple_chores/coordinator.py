@@ -131,6 +131,9 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if room_id in by_room:
                 by_room[room_id].append(chore_with_room)
 
+        # Get all users (HA + custom)
+        all_users = await self.async_get_users()
+
         result = {
             "today": today.isoformat(),
             "seven_days_from_today": next_seven_days.isoformat(),
@@ -143,6 +146,7 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "has_overdue": bool(overdue),
             "by_room": by_room,
             "rooms": all_rooms,
+            "users": all_users,
             "chores": list(self.store.chores.values()),
             "total_chores": len(self.store.chores),
         }
