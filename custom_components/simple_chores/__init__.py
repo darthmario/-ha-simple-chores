@@ -252,11 +252,20 @@ class ServiceHandlerFactory:
         """Create a user operation handler."""
         async def handler(call: ServiceCall) -> None:
             try:
+                _LOGGER.info("=== User handler called for operation: %s ===", operation)
+                _LOGGER.info("Service call data: %s", dict(call.data))
+                _LOGGER.info("ATTR_USER_NAME constant value: %s", ATTR_USER_NAME)
+                _LOGGER.info("ATTR_AVATAR constant value: %s", ATTR_AVATAR)
+                _LOGGER.info("ATTR_USER_ID constant value: %s", ATTR_USER_ID)
+
                 user_id = call.data.get(ATTR_USER_ID)
                 name = call.data.get(ATTR_USER_NAME)
                 avatar = call.data.get(ATTR_AVATAR)
 
+                _LOGGER.info("Extracted values - user_id: %s, name: %s, avatar: %s", user_id, name, avatar)
+
                 if operation == "add":
+                    _LOGGER.info("Calling coordinator.async_add_user with name=%s, avatar=%s", name, avatar)
                     await self.coordinator.async_add_user(name, avatar)
                     _LOGGER.info("Successfully added custom user: %s", name)
                 elif operation == "remove":
@@ -270,6 +279,7 @@ class ServiceHandlerFactory:
                 raise HomeAssistantError(f"Invalid input: {e}") from e
             except KeyError as e:
                 _LOGGER.error("Missing required field in %s_user: %s", operation, e)
+                _LOGGER.error("KeyError details - Key: %s, Type: %s", e, type(e))
                 raise HomeAssistantError(f"Missing required field: {e}") from e
             except Exception as e:
                 _LOGGER.exception("Unexpected error in %s_user", operation)

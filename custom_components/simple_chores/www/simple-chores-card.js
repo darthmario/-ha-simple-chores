@@ -1135,10 +1135,15 @@ class SimpleChoresCard extends LitElement {
 
     this._isLoading = true;
     try {
-      await this.hass.callService("simple_chores", "add_user", {
+      const serviceData = {
         name: this._formData.user.name.trim(),
         avatar: this._formData.user.avatar || "mdi:account"
-      });
+      };
+
+      console.log("Simple Chores Card: Calling add_user service with data:", serviceData);
+      console.log("Simple Chores Card: Service domain: simple_chores, service: add_user");
+
+      await this.hass.callService("simple_chores", "add_user", serviceData);
 
       this._showToast(`User "${this._formData.user.name}" added successfully!`);
       this._invalidateCache('users');
@@ -1146,6 +1151,7 @@ class SimpleChoresCard extends LitElement {
       this.requestUpdate();
     } catch (error) {
       console.error("Simple Chores Card: Failed to add user:", error);
+      console.error("Simple Chores Card: Error details:", JSON.stringify(error, null, 2));
       const message = this._parseErrorMessage(error, 'adding user');
       this._showToast(message);
     } finally {
