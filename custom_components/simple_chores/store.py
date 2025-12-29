@@ -60,6 +60,10 @@ class SimpleChoresStore:
         data = await self._store.async_load()
         if data:
             self._data = data
+            # Ensure all required keys exist (for backward compatibility)
+            if "users" not in self._data:
+                self._data["users"] = {}
+                _LOGGER.info("Added missing 'users' key to existing data")
         return self._data
 
     async def async_save(self) -> None:
