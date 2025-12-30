@@ -1146,6 +1146,10 @@ class SimpleChoresCard extends LitElement {
       await this.hass.callService("simple_chores", "add_user", serviceData);
 
       this._showToast(`User "${this._formData.user.name}" added successfully!`);
+
+      // Wait for coordinator to refresh and sensor to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       this._invalidateCache('users');
       this._closeAddUserModal();
       this.requestUpdate();
@@ -1179,6 +1183,10 @@ class SimpleChoresCard extends LitElement {
       });
 
       this._showToast(`User "${userName}" deleted successfully!`);
+
+      // Wait for coordinator to refresh and sensor to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // Invalidate user cache since we deleted a user
       this._invalidateCache('users');
       this.requestUpdate();
@@ -1231,6 +1239,10 @@ class SimpleChoresCard extends LitElement {
       });
 
       this._showToast(`User "${this._formData.user.name}" updated successfully!`);
+
+      // Wait for coordinator to refresh and sensor to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       this._invalidateCache('users');
       this._closeEditUserModal();
       this.requestUpdate();
