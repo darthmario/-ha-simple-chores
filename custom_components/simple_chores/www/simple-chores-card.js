@@ -1088,8 +1088,14 @@ class SimpleChoresCard extends LitElement {
       });
 
       this._showToast(`Room "${roomName}" deleted successfully!`);
-      // Invalidate room cache since we deleted a room
+
+      // Invalidate cache immediately to force fresh data on next render
       this._invalidateCache('rooms');
+
+      // Wait for coordinator to refresh and sensor to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Force UI update with fresh data
       this.requestUpdate();
     } catch (error) {
       console.error("Simple Chores Card: Failed to delete room:", error);
@@ -1184,11 +1190,13 @@ class SimpleChoresCard extends LitElement {
 
       this._showToast(`User "${userName}" deleted successfully!`);
 
+      // Invalidate cache immediately to force fresh data on next render
+      this._invalidateCache('users');
+
       // Wait for coordinator to refresh and sensor to update
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Invalidate user cache since we deleted a user
-      this._invalidateCache('users');
+      // Force UI update with fresh data
       this.requestUpdate();
     } catch (error) {
       console.error("Simple Chores Card: Failed to delete user:", error);
