@@ -56,6 +56,7 @@ class SimpleChoresCard extends LitElement {
       _currentView: { type: String },
       _calendarMonth: { type: Number },
       _calendarYear: { type: Number },
+      _optimisticChoreUpdates: { type: Object },
       // Modal system
       _activeModal: { type: String },
       _modalData: { type: Object },
@@ -106,6 +107,7 @@ class SimpleChoresCard extends LitElement {
     const now = new Date();
     this._calendarMonth = now.getMonth();
     this._calendarYear = now.getFullYear();
+    this._optimisticChoreUpdates = {};
     // Modal system
     this._activeModal = null;
     this._modalData = {};
@@ -645,6 +647,14 @@ class SimpleChoresCard extends LitElement {
     const roomFiltered = this._filterChoresByRoom(allChores);
     const filteredChores = this._filterChoresByUser(roomFiltered);
 
+    // Apply optimistic updates
+    const choresWithOptimistic = filteredChores.map(chore => {
+      if (this._optimisticChoreUpdates[chore.id]) {
+        return { ...chore, next_due: this._optimisticChoreUpdates[chore.id] };
+      }
+      return chore;
+    });
+
     // Calendar navigation
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'];
@@ -683,9 +693,9 @@ class SimpleChoresCard extends LitElement {
       weeks.push(currentWeek);
     }
 
-    // Group chores by date
+    // Group chores by date (using optimistically updated chores)
     const choresByDate = {};
-    filteredChores.forEach(chore => {
+    choresWithOptimistic.forEach(chore => {
       const dueDate = chore.next_due || chore.due_date;
       if (dueDate) {
         const dateKey = dueDate.split('T')[0]; // Get YYYY-MM-DD part
@@ -810,15 +820,41 @@ class SimpleChoresCard extends LitElement {
 
     if (!newDateStr) return;
 
+    // Store original date in case we need to revert
+    const originalDate = chore.next_due || chore.due_date;
+
+    // Optimistically update the UI immediately
+    this._optimisticChoreUpdates = {
+      ...this._optimisticChoreUpdates,
+      [chore.id]: newDateStr
+    };
+    this.requestUpdate();
+
     // Update chore due date
     try {
       await this.hass.callService("simple_chores", "update_chore", {
         chore_id: chore.id,
         next_due: newDateStr
       });
+
+      // Wait a bit for the state to update, then clear optimistic update
+      setTimeout(() => {
+        const updates = { ...this._optimisticChoreUpdates };
+        delete updates[chore.id];
+        this._optimisticChoreUpdates = updates;
+        this.requestUpdate();
+      }, 1000);
+
       this._showToast(`${chore.name} rescheduled to ${this._formatDate(newDateStr)}`);
     } catch (error) {
       console.error("Error rescheduling chore:", error);
+
+      // Revert optimistic update on error
+      const updates = { ...this._optimisticChoreUpdates };
+      delete updates[chore.id];
+      this._optimisticChoreUpdates = updates;
+      this.requestUpdate();
+
       this._showToast("Error rescheduling chore. Please try again.");
     }
   }
@@ -2950,12 +2986,14 @@ class SimpleChoresCard extends LitElement {
 
       .calendar-cell {
         min-height: 80px;
+        min-width: 0;
         border: 1px solid var(--divider-color);
         border-radius: 4px;
         padding: 4px;
         background: var(--card-background-color);
         transition: all 0.2s;
         cursor: pointer;
+        overflow: hidden;
       }
 
       .calendar-cell:hover {
