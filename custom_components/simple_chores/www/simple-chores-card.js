@@ -53,6 +53,9 @@ class SimpleChoresCard extends LitElement {
       config: { type: Object },
       _selectedRoom: { type: String },
       _showMyChoresOnly: { type: Boolean },
+      _currentView: { type: String },
+      _calendarMonth: { type: Number },
+      _calendarYear: { type: Number },
       // Modal system
       _activeModal: { type: String },
       _modalData: { type: Object },
@@ -99,6 +102,10 @@ class SimpleChoresCard extends LitElement {
     super();
     this._selectedRoom = "all";
     this._showMyChoresOnly = false;
+    this._currentView = "list";
+    const now = new Date();
+    this._calendarMonth = now.getMonth();
+    this._calendarYear = now.getFullYear();
     // Modal system
     this._activeModal = null;
     this._modalData = {};
@@ -448,6 +455,13 @@ class SimpleChoresCard extends LitElement {
             >
               <ha-icon icon="mdi:${this._showMyChoresOnly ? 'account-check' : 'account-outline'}"></ha-icon>
             </button>
+            <button
+              class="view-toggle-btn ${this._currentView === 'calendar' ? 'active' : ''}"
+              @click=${this._toggleView}
+              title="${this._currentView === 'list' ? 'Switch to Calendar View' : 'Switch to List View'}"
+            >
+              <ha-icon icon="mdi:${this._currentView === 'calendar' ? 'view-list' : 'calendar-month'}"></ha-icon>
+            </button>
             <button class="add-room-btn" @click=${this._openAddRoomModal} title="Add Custom Room">
               <ha-icon icon="mdi:home-plus"></ha-icon>
             </button>
@@ -470,9 +484,13 @@ class SimpleChoresCard extends LitElement {
         </div>
         
         <div class="card-content">
-          ${this._renderStats()}
-          ${this._renderChoreList(dueToday, "Due Today")}
-          ${this._renderChoreList(dueThisWeek, "Due in Next 7 Days")}
+          ${this._currentView === 'list' ? html`
+            ${this._renderStats()}
+            ${this._renderChoreList(dueToday, "Due Today")}
+            ${this._renderChoreList(dueThisWeek, "Due in Next 7 Days")}
+          ` : html`
+            ${this._renderCalendarView()}
+          `}
         </div>
         
         ${this._renderAddRoomModal()}
@@ -620,6 +638,189 @@ class SimpleChoresCard extends LitElement {
         </div>
       </div>
     `;
+  }
+
+  _renderCalendarView() {
+    const allChores = this._getAllChores();
+    const roomFiltered = this._filterChoresByRoom(allChores);
+    const filteredChores = this._filterChoresByUser(roomFiltered);
+
+    // Calendar navigation
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    // Get first and last day of month
+    const firstDay = new Date(this._calendarYear, this._calendarMonth, 1);
+    const lastDay = new Date(this._calendarYear, this._calendarMonth + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+
+    // Create calendar grid
+    const weeks = [];
+    let currentWeek = [];
+
+    // Add empty cells for days before month starts
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      currentWeek.push(null);
+    }
+
+    // Add days of month
+    for (let day = 1; day <= daysInMonth; day++) {
+      currentWeek.push(day);
+
+      if (currentWeek.length === 7) {
+        weeks.push(currentWeek);
+        currentWeek = [];
+      }
+    }
+
+    // Add empty cells for remaining days
+    if (currentWeek.length > 0) {
+      while (currentWeek.length < 7) {
+        currentWeek.push(null);
+      }
+      weeks.push(currentWeek);
+    }
+
+    // Group chores by date
+    const choresByDate = {};
+    filteredChores.forEach(chore => {
+      const dueDate = chore.next_due || chore.due_date;
+      if (dueDate) {
+        const dateKey = dueDate.split('T')[0]; // Get YYYY-MM-DD part
+        if (!choresByDate[dateKey]) {
+          choresByDate[dateKey] = [];
+        }
+        choresByDate[dateKey].push(chore);
+      }
+    });
+
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+
+    return html`
+      <div class="calendar-view">
+        <div class="calendar-header">
+          <button @click=${this._previousMonth} class="calendar-nav-btn">
+            <ha-icon icon="mdi:chevron-left"></ha-icon>
+          </button>
+          <h3>${monthNames[this._calendarMonth]} ${this._calendarYear}</h3>
+          <button @click=${this._nextMonth} class="calendar-nav-btn">
+            <ha-icon icon="mdi:chevron-right"></ha-icon>
+          </button>
+        </div>
+
+        <div class="calendar-grid">
+          ${dayNames.map(day => html`
+            <div class="calendar-day-header">${day}</div>
+          `)}
+
+          ${weeks.map(week => week.map(day => {
+            if (!day) {
+              return html`<div class="calendar-cell empty"></div>`;
+            }
+
+            const dateStr = `${this._calendarYear}-${String(this._calendarMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const choresOnDate = choresByDate[dateStr] || [];
+            const isToday = dateStr === todayStr;
+            const isPast = new Date(dateStr) < new Date(todayStr);
+
+            return html`
+              <div
+                class="calendar-cell ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}"
+                data-date="${dateStr}"
+                @dragover=${this._handleDragOver}
+                @drop=${this._handleDrop}
+              >
+                <div class="calendar-day-number">${day}</div>
+                <div class="calendar-chores">
+                  ${choresOnDate.map(chore => {
+                    const isOverdue = isPast;
+                    return html`
+                      <div
+                        class="calendar-chore ${isOverdue ? 'overdue' : ''}"
+                        draggable="true"
+                        @dragstart=${(e) => this._handleDragStart(e, chore)}
+                        @click=${() => this._openCompleteChoreModal(chore)}
+                        title="${chore.name} - ${chore.room_name || 'Unknown room'}"
+                      >
+                        <span class="calendar-chore-name">${chore.name}</span>
+                      </div>
+                    `;
+                  })}
+                </div>
+              </div>
+            `;
+          }))}
+        </div>
+
+        <div class="calendar-legend">
+          <span class="legend-item">
+            <span class="legend-box today"></span> Today
+          </span>
+          <span class="legend-item">
+            <span class="legend-box overdue"></span> Overdue
+          </span>
+          <span class="legend-item">
+            <span class="legend-box normal"></span> Upcoming
+          </span>
+        </div>
+      </div>
+    `;
+  }
+
+  _previousMonth() {
+    if (this._calendarMonth === 0) {
+      this._calendarMonth = 11;
+      this._calendarYear--;
+    } else {
+      this._calendarMonth--;
+    }
+  }
+
+  _nextMonth() {
+    if (this._calendarMonth === 11) {
+      this._calendarMonth = 0;
+      this._calendarYear++;
+    } else {
+      this._calendarMonth++;
+    }
+  }
+
+  _handleDragStart(e, chore) {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('chore', JSON.stringify(chore));
+  }
+
+  _handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }
+
+  async _handleDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const choreData = e.dataTransfer.getData('chore');
+    if (!choreData) return;
+
+    const chore = JSON.parse(choreData);
+    const newDateStr = e.currentTarget.dataset.date;
+
+    if (!newDateStr) return;
+
+    // Update chore due date
+    try {
+      await this.hass.callService("simple_chores", "update_chore", {
+        chore_id: chore.id,
+        next_due: newDateStr
+      });
+      this._showToast(`${chore.name} rescheduled to ${this._formatDate(newDateStr)}`);
+    } catch (error) {
+      console.error("Error rescheduling chore:", error);
+      this._showToast("Error rescheduling chore. Please try again.");
+    }
   }
 
   _getDueChores(period) {
@@ -878,6 +1079,10 @@ class SimpleChoresCard extends LitElement {
 
   _toggleMyChoresFilter() {
     this._showMyChoresOnly = !this._showMyChoresOnly;
+  }
+
+  _toggleView() {
+    this._currentView = this._currentView === 'list' ? 'calendar' : 'list';
   }
 
   _filterChoresByUser(chores) {
@@ -2649,7 +2854,7 @@ class SimpleChoresCard extends LitElement {
         flex-wrap: wrap;
       }
       
-      .add-room-btn, .add-chore-btn, .manage-rooms-btn, .history-btn, .my-chores-filter-btn, .add-user-btn, .manage-users-btn {
+      .add-room-btn, .add-chore-btn, .manage-rooms-btn, .history-btn, .my-chores-filter-btn, .view-toggle-btn, .add-user-btn, .manage-users-btn {
         background: rgba(255, 255, 255, 0.2);
         border: none;
         border-radius: 50%;
@@ -2663,7 +2868,7 @@ class SimpleChoresCard extends LitElement {
         transition: background-color 0.2s;
       }
 
-      .add-room-btn:hover, .add-chore-btn:hover, .manage-rooms-btn:hover, .history-btn:hover, .my-chores-filter-btn:hover, .add-user-btn:hover, .manage-users-btn:hover {
+      .add-room-btn:hover, .add-chore-btn:hover, .manage-rooms-btn:hover, .history-btn:hover, .my-chores-filter-btn:hover, .view-toggle-btn:hover, .add-user-btn:hover, .manage-users-btn:hover {
         background: rgba(255, 255, 255, 0.3);
       }
 
@@ -2676,8 +2881,187 @@ class SimpleChoresCard extends LitElement {
         background: var(--primary-color);
         opacity: 0.9;
       }
-      
-      
+
+      .view-toggle-btn.active {
+        background: var(--primary-color);
+        color: white;
+      }
+
+      .view-toggle-btn.active:hover {
+        background: var(--primary-color);
+        opacity: 0.9;
+      }
+
+      /* ============================================
+         CALENDAR VIEW
+         ============================================ */
+      .calendar-view {
+        width: 100%;
+        min-height: 400px;
+      }
+
+      .calendar-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 0;
+        margin-bottom: 16px;
+        border-bottom: 1px solid var(--divider-color);
+      }
+
+      .calendar-header h3 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 500;
+      }
+
+      .calendar-nav-btn {
+        background: transparent;
+        border: 1px solid var(--divider-color);
+        border-radius: 50%;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .calendar-nav-btn:hover {
+        background: var(--secondary-background-color);
+        border-color: var(--primary-color);
+      }
+
+      .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+        margin-bottom: 16px;
+      }
+
+      .calendar-day-header {
+        text-align: center;
+        font-weight: 600;
+        padding: 8px;
+        color: var(--secondary-text-color);
+        font-size: 0.875rem;
+      }
+
+      .calendar-cell {
+        min-height: 80px;
+        border: 1px solid var(--divider-color);
+        border-radius: 4px;
+        padding: 4px;
+        background: var(--card-background-color);
+        transition: all 0.2s;
+        cursor: pointer;
+      }
+
+      .calendar-cell:hover {
+        background: var(--secondary-background-color);
+        border-color: var(--primary-color);
+      }
+
+      .calendar-cell.empty {
+        background: transparent;
+        border-color: transparent;
+        cursor: default;
+      }
+
+      .calendar-cell.today {
+        background: rgba(var(--rgb-primary-color), 0.1);
+        border-color: var(--primary-color);
+        border-width: 2px;
+      }
+
+      .calendar-cell.past {
+        opacity: 0.6;
+      }
+
+      .calendar-day-number {
+        font-size: 0.875rem;
+        font-weight: 500;
+        padding: 4px;
+        text-align: right;
+      }
+
+      .calendar-chores {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin-top: 4px;
+      }
+
+      .calendar-chore {
+        background: var(--primary-color);
+        color: white;
+        padding: 4px 6px;
+        border-radius: 3px;
+        font-size: 0.75rem;
+        cursor: grab;
+        transition: all 0.2s;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .calendar-chore:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      }
+
+      .calendar-chore:active {
+        cursor: grabbing;
+      }
+
+      .calendar-chore.overdue {
+        background: var(--error-color);
+      }
+
+      .calendar-chore-name {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .calendar-legend {
+        display: flex;
+        gap: 16px;
+        padding: 12px;
+        background: var(--secondary-background-color);
+        border-radius: 4px;
+        flex-wrap: wrap;
+      }
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.875rem;
+      }
+
+      .legend-box {
+        width: 16px;
+        height: 16px;
+        border-radius: 3px;
+        border: 1px solid var(--divider-color);
+      }
+
+      .legend-box.today {
+        background: rgba(var(--rgb-primary-color), 0.3);
+        border-color: var(--primary-color);
+      }
+
+      .legend-box.overdue {
+        background: var(--error-color);
+      }
+
+      .legend-box.normal {
+        background: var(--primary-color);
+      }
+
+
       .room-selector select {
         padding: 8px 12px;
         border: none;

@@ -468,7 +468,7 @@ async def _async_send_due_notification(
     coordinator: SimpleChoresCoordinator,
     entry: ConfigEntry | None = None,
 ) -> None:
-    """Send notification about chores due today."""
+    """Send targeted notifications about chores due today."""
     # Refresh data first
     await coordinator.async_request_refresh()
 
@@ -479,30 +479,102 @@ async def _async_send_due_notification(
     if not due_today:
         return
 
-    # Build notification message
-    chore_list = "\n".join([f"• {c['name']} ({c.get('room_name', 'Unknown')})" for c in due_today])
-    message = f"You have {len(due_today)} chore(s) due today:\n{chore_list}"
+    # Group chores by assigned user
+    chores_by_user: dict[str | None, list[dict[str, Any]]] = {}
+    for chore in due_today:
+        assigned_to = chore.get("assigned_to")
+        if assigned_to not in chores_by_user:
+            chores_by_user[assigned_to] = []
+        chores_by_user[assigned_to].append(chore)
 
-    # Get notify targets from options
-    notify_targets = []
+    # Get all mobile app notify services
+    all_mobile_apps = []
+    for service in hass.services.async_services().get("notify", {}):
+        if service.startswith("mobile_app_"):
+            all_mobile_apps.append(service)
+
+    # Get configured notify targets
+    configured_targets = []
     if entry:
-        notify_targets = entry.options.get(CONF_NOTIFY_TARGETS, [])
+        configured_targets = entry.options.get(CONF_NOTIFY_TARGETS, [])
 
-    # If no specific targets, try to notify all mobile apps
-    if not notify_targets:
-        # Find all mobile app notify services
-        for service in hass.services.async_services().get("notify", {}):
-            if service.startswith("mobile_app_"):
-                notify_targets.append(service)
+    # Send targeted notifications for assigned chores
+    for user_id, user_chores in chores_by_user.items():
+        if user_id is None:
+            # Unassigned chores - broadcast to all targets
+            targets = configured_targets if configured_targets else all_mobile_apps
+            await _async_send_notification_to_targets(
+                hass, targets, user_chores, "Unassigned Chores Due Today"
+            )
+        else:
+            # Assigned chores - send to specific user
+            user_name = await coordinator.async_get_user_name(user_id)
+            user_targets = await _async_find_user_notify_services(hass, user_id, user_name)
+
+            if user_targets:
+                await _async_send_notification_to_targets(
+                    hass, user_targets, user_chores, f"{user_name}'s Chores Due Today"
+                )
+            else:
+                _LOGGER.debug(
+                    "No notification service found for user %s (%s), falling back to broadcast",
+                    user_name, user_id
+                )
+                # Fallback to broadcast if user's device not found
+                targets = configured_targets if configured_targets else all_mobile_apps
+                await _async_send_notification_to_targets(
+                    hass, targets, user_chores, f"{user_name}'s Chores Due Today"
+                )
+
+
+async def _async_find_user_notify_services(
+    hass: HomeAssistant, user_id: str, user_name: str
+) -> list[str]:
+    """Find mobile app notify services for a specific user."""
+    user_services = []
+
+    # Get all mobile app services
+    all_services = hass.services.async_services().get("notify", {})
+
+    # Try to match by username (sanitized for service naming)
+    username_normalized = user_name.lower().replace(" ", "_").replace("-", "_")
+
+    for service in all_services:
+        if not service.startswith("mobile_app_"):
+            continue
+
+        # Extract device/user name from service (e.g., mobile_app_john -> john)
+        device_name = service.replace("mobile_app_", "")
+
+        # Match if the device name contains the username
+        if username_normalized in device_name.lower():
+            user_services.append(service)
+
+    return user_services
+
+
+async def _async_send_notification_to_targets(
+    hass: HomeAssistant,
+    targets: list[str],
+    chores: list[dict[str, Any]],
+    title: str,
+) -> None:
+    """Send notification to specified targets."""
+    if not targets or not chores:
+        return
+
+    # Build notification message
+    chore_list = "\n".join([f"• {c['name']} ({c.get('room_name', 'Unknown')})" for c in chores])
+    message = f"You have {len(chores)} chore(s) due today:\n{chore_list}"
 
     # Send notifications
-    for target in notify_targets:
+    for target in targets:
         try:
             await hass.services.async_call(
                 "notify",
                 target,
                 {
-                    "title": "Simple Chores Due Today",
+                    "title": title,
                     "message": message,
                     "data": {
                         "tag": "simple_chores_due",
