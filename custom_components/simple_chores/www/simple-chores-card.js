@@ -5,7 +5,7 @@
 
 // Card version - update this when releasing new versions
 // This should match the version in manifest.json
-const CARD_VERSION = "1.4.16";
+const CARD_VERSION = "1.4.17";
 
 // Try the most direct approach used by working HA cards
 let LitElement, html, css;
@@ -59,11 +59,16 @@ class SimpleChoresCard extends LitElement {
       hass: { type: Object },
       config: { type: Object },
       _selectedRoom: { type: String },
+      _selectedAssignee: { type: String },
       _showMyChoresOnly: { type: Boolean },
       _currentView: { type: String },
       _calendarMonth: { type: Number },
       _calendarYear: { type: Number },
       _optimisticChoreUpdates: { type: Object },
+      // Dropdown states for new header UI
+      _showRoomDropdown: { type: Boolean },
+      _showAssigneeDropdown: { type: Boolean },
+      _activeChoreMenu: { type: String },
       // Modal system
       _activeModal: { type: String },
       _modalData: { type: Object },
@@ -109,12 +114,17 @@ class SimpleChoresCard extends LitElement {
   constructor() {
     super();
     this._selectedRoom = "all";
+    this._selectedAssignee = "all";
     this._showMyChoresOnly = false;
     this._currentView = "list";
     const now = new Date();
     this._calendarMonth = now.getMonth();
     this._calendarYear = now.getFullYear();
     this._optimisticChoreUpdates = {};
+    // Dropdown states for new header UI
+    this._showRoomDropdown = false;
+    this._showAssigneeDropdown = false;
+    this._activeChoreMenu = null;
     // Modal system
     this._activeModal = null;
     this._modalData = {};
@@ -195,8 +205,14 @@ class SimpleChoresCard extends LitElement {
   }
 
   _handleKeydown(e) {
-    // ESC key - close any open modal
+    // ESC key - close any open dropdown or modal
     if (e.key === 'Escape') {
+      // Close dropdowns first
+      if (this._showRoomDropdown || this._showAssigneeDropdown || this._activeChoreMenu) {
+        this._closeAllDropdowns();
+        return;
+      }
+      // Then close modals
       if (this._showAddRoomModal) {
         this._closeAddRoomModal();
       } else if (this._showManageRoomsModal) {
@@ -463,63 +479,146 @@ class SimpleChoresCard extends LitElement {
     const dueToday = this._getDueChores("today");
     const dueThisWeek = this._getDueChores("week");
     const rooms = this._getRooms();
+    const users = this._getUsers();
 
     const cardClasses = [
       this.config.full_width ? 'full-width' : '',
       this.config.compact_mode ? 'compact' : ''
     ].filter(Boolean).join(' ');
 
+    // Get selected room name for dropdown button
+    const selectedRoomName = this._selectedRoom === 'all'
+      ? 'All Rooms'
+      : (rooms.find(r => r.id === this._selectedRoom)?.name || 'All Rooms');
+
+    // Get selected assignee name for dropdown button
+    const selectedAssigneeName = this._getSelectedAssigneeName(users);
+
     return html`
       <ha-card class="${cardClasses}">
-        <div class="card-header">
-          <div class="card-title">${this.config.title}</div>
-          <div class="header-controls">
-            <div class="room-selector">
-              <select @change=${this._roomChanged}>
-                <option value="all" ?selected=${this._selectedRoom === "all"}>All Rooms</option>
-                ${rooms.map(room => html`
-                  <option value=${room.id} ?selected=${this._selectedRoom === room.id}>
-                    ${room.name}
-                  </option>
-                `)}
-              </select>
-            </div>
-            <button
-              class="my-chores-filter-btn ${this._showMyChoresOnly ? 'active' : ''}"
-              @click=${this._toggleMyChoresFilter}
-              title="${this._showMyChoresOnly ? 'Show All Chores' : 'Show My Chores Only'}"
-            >
-              <ha-icon icon="mdi:${this._showMyChoresOnly ? 'account-check' : 'account-outline'}"></ha-icon>
-            </button>
-            <button
-              class="view-toggle-btn ${this._currentView === 'calendar' ? 'active' : ''}"
-              @click=${this._toggleView}
-              title="${this._currentView === 'list' ? 'Switch to Calendar View' : 'Switch to List View'}"
-            >
-              <ha-icon icon="mdi:${this._currentView === 'calendar' ? 'view-list' : 'calendar-month'}"></ha-icon>
-            </button>
-            <button class="add-room-btn" @click=${this._openAddRoomModal} title="Add Custom Room">
-              <ha-icon icon="mdi:home-plus"></ha-icon>
-            </button>
-            <button class="manage-rooms-btn" @click=${this._openManageRoomsModal} title="Manage Rooms">
-              <ha-icon icon="mdi:cog"></ha-icon>
-            </button>
-            <button class="add-user-btn" @click=${this._openAddUserModal} title="Add Custom User">
-              <ha-icon icon="mdi:account-plus"></ha-icon>
-            </button>
-            <button class="manage-users-btn" @click=${this._openManageUsersModal} title="Manage Users">
-              <ha-icon icon="mdi:account-cog"></ha-icon>
-            </button>
-            <button class="history-btn" @click=${this._openHistoryModal} title="View Completion History">
-              <ha-icon icon="mdi:history"></ha-icon>
-            </button>
-            <button class="add-chore-btn" @click=${this._openAddChoreModal} title="Add New Chore">
-              <ha-icon icon="mdi:playlist-plus"></ha-icon>
+        <div class="card-header" @click=${this._handleHeaderClick}>
+          <!-- Top row: Title + Add Chore button -->
+          <div class="header-top-row">
+            <div class="card-title">${this.config.title}</div>
+            <button class="add-chore-btn-primary" @click=${this._openAddChoreModal} title="Add New Chore">
+              <ha-icon icon="mdi:plus"></ha-icon>
+              <span>Add Chore</span>
             </button>
           </div>
+
+          <!-- Bottom row: Dropdowns + Icon buttons -->
+          <div class="header-bottom-row">
+            <div class="header-dropdowns">
+              <!-- Room Dropdown -->
+              <div class="dropdown-container">
+                <button
+                  class="dropdown-btn"
+                  @click=${this._toggleRoomDropdown}
+                >
+                  <ha-icon icon="mdi:home"></ha-icon>
+                  <span>${selectedRoomName}</span>
+                  <ha-icon icon="mdi:chevron-down" class="chevron"></ha-icon>
+                </button>
+                ${this._showRoomDropdown ? html`
+                  <div class="dropdown-menu">
+                    <div class="dropdown-section">
+                      <div
+                        class="dropdown-item ${this._selectedRoom === 'all' ? 'active' : ''}"
+                        @click=${() => this._selectRoom('all')}
+                      >
+                        All Rooms
+                      </div>
+                      ${rooms.map(room => html`
+                        <div
+                          class="dropdown-item ${this._selectedRoom === room.id ? 'active' : ''}"
+                          @click=${() => this._selectRoom(room.id)}
+                        >
+                          ${room.name}
+                        </div>
+                      `)}
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-section">
+                      <div class="dropdown-item action-item" @click=${this._openAddRoomModalFromDropdown}>
+                        <ha-icon icon="mdi:plus"></ha-icon>
+                        Add Room
+                      </div>
+                      <div class="dropdown-item action-item" @click=${this._openManageRoomsModalFromDropdown}>
+                        <ha-icon icon="mdi:cog"></ha-icon>
+                        Manage Rooms
+                      </div>
+                    </div>
+                  </div>
+                ` : ''}
+              </div>
+
+              <!-- Assignee Dropdown -->
+              <div class="dropdown-container">
+                <button
+                  class="dropdown-btn"
+                  @click=${this._toggleAssigneeDropdown}
+                >
+                  <ha-icon icon="mdi:account"></ha-icon>
+                  <span>${selectedAssigneeName}</span>
+                  <ha-icon icon="mdi:chevron-down" class="chevron"></ha-icon>
+                </button>
+                ${this._showAssigneeDropdown ? html`
+                  <div class="dropdown-menu">
+                    <div class="dropdown-section">
+                      <div
+                        class="dropdown-item ${this._selectedAssignee === 'all' ? 'active' : ''}"
+                        @click=${() => this._selectAssignee('all')}
+                      >
+                        Anyone
+                      </div>
+                      <div
+                        class="dropdown-item ${this._selectedAssignee === 'mine' ? 'active' : ''}"
+                        @click=${() => this._selectAssignee('mine')}
+                      >
+                        My Chores
+                      </div>
+                      ${users.map(user => html`
+                        <div
+                          class="dropdown-item ${this._selectedAssignee === user.id ? 'active' : ''}"
+                          @click=${() => this._selectAssignee(user.id)}
+                        >
+                          ${user.name}
+                        </div>
+                      `)}
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-section">
+                      <div class="dropdown-item action-item" @click=${this._openAddUserModalFromDropdown}>
+                        <ha-icon icon="mdi:plus"></ha-icon>
+                        Add User
+                      </div>
+                      <div class="dropdown-item action-item" @click=${this._openManageUsersModalFromDropdown}>
+                        <ha-icon icon="mdi:cog"></ha-icon>
+                        Manage Users
+                      </div>
+                    </div>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+
+            <!-- Icon buttons -->
+            <div class="header-icon-buttons">
+              <button
+                class="icon-btn ${this._currentView === 'calendar' ? 'active' : ''}"
+                @click=${this._toggleView}
+                title="${this._currentView === 'list' ? 'Switch to Calendar View' : 'Switch to List View'}"
+              >
+                <ha-icon icon="mdi:calendar"></ha-icon>
+              </button>
+              <button class="icon-btn" @click=${this._openHistoryModal} title="View Completion History">
+                <ha-icon icon="mdi:history"></ha-icon>
+              </button>
+            </div>
+          </div>
         </div>
-        
-        <div class="card-content">
+
+        <div class="card-content" @click=${this._handleContentClick}>
           ${this._currentView === 'list' ? html`
             ${!this.config.hide_stats ? this._renderStats() : ''}
             ${this._renderChoreList(dueToday, "Due Today")}
@@ -528,7 +627,7 @@ class SimpleChoresCard extends LitElement {
             ${this._renderCalendarView()}
           `}
         </div>
-        
+
         ${this._renderAddRoomModal()}
         ${this._renderManageRoomsModal()}
         ${this._renderAddUserModal()}
@@ -541,6 +640,83 @@ class SimpleChoresCard extends LitElement {
         ${this._renderCompleteChoreModal()}
       </ha-card>
     `;
+  }
+
+  _getSelectedAssigneeName(users) {
+    if (this._selectedAssignee === 'all') return 'Anyone';
+    if (this._selectedAssignee === 'mine') return 'My Chores';
+    const user = users.find(u => u.id === this._selectedAssignee);
+    return user ? user.name : 'Anyone';
+  }
+
+  _handleHeaderClick(e) {
+    // Close dropdowns when clicking outside of them
+    if (!e.target.closest('.dropdown-container')) {
+      this._closeAllDropdowns();
+    }
+  }
+
+  _closeAllDropdowns() {
+    this._showRoomDropdown = false;
+    this._showAssigneeDropdown = false;
+    this._activeChoreMenu = null;
+  }
+
+  _handleContentClick(e) {
+    // Close chore overflow menus when clicking elsewhere
+    if (!e.target.closest('.chore-menu-container')) {
+      this._activeChoreMenu = null;
+    }
+  }
+
+  _toggleRoomDropdown(e) {
+    e.stopPropagation();
+    this._showAssigneeDropdown = false;
+    this._activeChoreMenu = null;
+    this._showRoomDropdown = !this._showRoomDropdown;
+  }
+
+  _toggleAssigneeDropdown(e) {
+    e.stopPropagation();
+    this._showRoomDropdown = false;
+    this._activeChoreMenu = null;
+    this._showAssigneeDropdown = !this._showAssigneeDropdown;
+  }
+
+  _selectRoom(roomId) {
+    this._selectedRoom = roomId;
+    this._showRoomDropdown = false;
+  }
+
+  _selectAssignee(assigneeId) {
+    this._selectedAssignee = assigneeId;
+    // Update legacy flag for compatibility
+    this._showMyChoresOnly = assigneeId === 'mine';
+    this._showAssigneeDropdown = false;
+  }
+
+  _openAddRoomModalFromDropdown(e) {
+    e.stopPropagation();
+    this._showRoomDropdown = false;
+    this._openAddRoomModal();
+  }
+
+  _openManageRoomsModalFromDropdown(e) {
+    e.stopPropagation();
+    this._showRoomDropdown = false;
+    this._openManageRoomsModal();
+  }
+
+  _openAddUserModalFromDropdown(e) {
+    e.stopPropagation();
+    this._showAssigneeDropdown = false;
+    this._openAddUserModal();
+  }
+
+  _openManageUsersModalFromDropdown(e) {
+    e.stopPropagation();
+    this._showAssigneeDropdown = false;
+    this._openManageUsersModal();
   }
 
   _renderStats() {
@@ -597,7 +773,6 @@ class SimpleChoresCard extends LitElement {
 
 
   _renderChore(chore) {
-
     // Handle different property names from different data sources
     let dueDate = chore.next_due || chore.due_date || chore.date;
 
@@ -608,7 +783,6 @@ class SimpleChoresCard extends LitElement {
 
     // Use consolidated room lookup logic
     const roomName = this._resolveRoomName(chore);
-    const roomIcon = this._getRoomIcon(chore.room_id);
 
     // Get assigned user info
     const assignedTo = chore.assigned_to;
@@ -620,60 +794,95 @@ class SimpleChoresCard extends LitElement {
     }
 
     const isOverdue = new Date(dueDate) < new Date().setHours(0,0,0,0);
+    const isMenuOpen = this._activeChoreMenu === chore.id;
 
     return html`
-      <div class="chore-item ${isOverdue ? 'overdue' : ''}">
-        <div class="chore-info">
-          <span class="chore-name">${chore.name}</span>
-          <span class="chore-separator">•</span>
-          <span class="chore-room">
-            <ha-icon icon="${roomIcon}" class="room-icon-inline"></ha-icon>
-            ${roomName}
-          </span>
-          <span class="chore-separator">•</span>
-          <span class="chore-due">Due: ${this._formatDate(dueDate)}</span>
-          ${assignedUserName ? html`
-            <span class="chore-separator">•</span>
-            <span class="chore-assigned">👤 ${assignedUserName}</span>
-          ` : ''}
-        </div>
-        <div class="chore-actions">
-          <button 
-            @click=${() => this._editChore(chore)}
-            class="action-btn edit-btn"
-            title="Edit Chore"
-          >
-            ✏️ Edit
-          </button>
-          <button 
-            @click=${() => this._deleteChore(chore.id, chore.name)}
-            class="action-btn delete-btn"
-            title="Delete Chore"
-          >
-            🗑️ Delete
-          </button>
-          <button 
-            @click=${() => this._openCompleteChoreModal(chore)}
-            class="action-btn complete-btn"
-          >
-            ✓ Complete
-          </button>
-          <button
-            @click=${() => this._skipChore(chore.id)}
-            class="action-btn skip-btn"
-          >
-            ⏭ Skip
-          </button>
-          <button
-            @click=${() => this._snoozeChore(chore.id)}
-            class="action-btn snooze-btn"
-            title="Snooze for 1 day"
-          >
-            ⏰ Snooze
-          </button>
+      <div class="chore-card ${isOverdue ? 'overdue' : ''}">
+        <div class="chore-card-content">
+          <div class="chore-card-info">
+            <div class="chore-card-name">${chore.name}</div>
+            <div class="chore-card-meta">
+              <span class="chore-meta-item">
+                <ha-icon icon="mdi:home" class="meta-icon"></ha-icon>
+                ${roomName}
+              </span>
+              <span class="chore-meta-separator">·</span>
+              <span class="chore-meta-item ${isOverdue ? 'overdue-text' : ''}">
+                Due: ${this._formatDate(dueDate)}
+              </span>
+              ${assignedUserName ? html`
+                <span class="chore-meta-separator">·</span>
+                <span class="chore-meta-item">
+                  <ha-icon icon="mdi:account" class="meta-icon"></ha-icon>
+                  ${assignedUserName}
+                </span>
+              ` : ''}
+            </div>
+          </div>
+          <div class="chore-card-actions">
+            <button
+              class="chore-action-btn complete"
+              @click=${() => this._openCompleteChoreModal(chore)}
+              title="Complete"
+            >
+              <ha-icon icon="mdi:check"></ha-icon>
+            </button>
+            <button
+              class="chore-action-btn secondary"
+              @click=${() => this._snoozeChore(chore.id)}
+              title="Snooze 1 day"
+            >
+              <ha-icon icon="mdi:clock-outline"></ha-icon>
+            </button>
+            <button
+              class="chore-action-btn secondary"
+              @click=${() => this._skipChore(chore.id)}
+              title="Skip to next"
+            >
+              <ha-icon icon="mdi:skip-next"></ha-icon>
+            </button>
+            <div class="chore-menu-container">
+              <button
+                class="chore-action-btn secondary"
+                @click=${(e) => this._toggleChoreMenu(e, chore.id)}
+                title="More actions"
+              >
+                <ha-icon icon="mdi:dots-horizontal"></ha-icon>
+              </button>
+              ${isMenuOpen ? html`
+                <div class="chore-overflow-menu">
+                  <div class="overflow-menu-item" @click=${() => this._editChoreFromMenu(chore)}>
+                    <ha-icon icon="mdi:pencil"></ha-icon>
+                    Edit
+                  </div>
+                  <div class="overflow-menu-item danger" @click=${() => this._deleteChoreFromMenu(chore.id, chore.name)}>
+                    <ha-icon icon="mdi:trash-can"></ha-icon>
+                    Delete
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          </div>
         </div>
       </div>
     `;
+  }
+
+  _toggleChoreMenu(e, choreId) {
+    e.stopPropagation();
+    this._showRoomDropdown = false;
+    this._showAssigneeDropdown = false;
+    this._activeChoreMenu = this._activeChoreMenu === choreId ? null : choreId;
+  }
+
+  _editChoreFromMenu(chore) {
+    this._activeChoreMenu = null;
+    this._editChore(chore);
+  }
+
+  _deleteChoreFromMenu(choreId, choreName) {
+    this._activeChoreMenu = null;
+    this._deleteChore(choreId, choreName);
   }
 
   _renderCalendarView() {
@@ -1186,11 +1395,18 @@ class SimpleChoresCard extends LitElement {
   }
 
   _filterChoresByUser(chores) {
-    if (!this._showMyChoresOnly) return chores;
-    if (!this.hass || !this.hass.user) return chores;
+    // 'all' means show all chores (no filter)
+    if (this._selectedAssignee === 'all') return chores;
 
-    const currentUserId = this.hass.user.id;
-    return chores.filter(chore => chore.assigned_to === currentUserId);
+    // 'mine' means show only chores assigned to the current user
+    if (this._selectedAssignee === 'mine') {
+      if (!this.hass || !this.hass.user) return chores;
+      const currentUserId = this.hass.user.id;
+      return chores.filter(chore => chore.assigned_to === currentUserId);
+    }
+
+    // Otherwise filter by specific user ID
+    return chores.filter(chore => chore.assigned_to === this._selectedAssignee);
   }
 
   _completeChore(choreId) {
@@ -2991,30 +3207,186 @@ class SimpleChoresCard extends LitElement {
       }
 
       /* ============================================
-         HEADER & CONTROLS
+         HEADER & CONTROLS (New Gradient Design)
          ============================================ */
       .card-header {
         padding: 16px;
-        border-bottom: 1px solid var(--divider-color);
-        background: var(--primary-color);
-        color: var(--text-primary-color);
+        background: linear-gradient(to right, #06b6d4, #3b82f6);
+        color: white;
+        border-radius: 12px 12px 0 0;
       }
-      
-      .card-title {
-        font-size: 1.4em;
-        font-weight: 500;
+
+      .header-top-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
         margin-bottom: 12px;
-        text-align: center;
       }
-      
-      .header-controls {
+
+      .card-title {
+        font-size: 1.5em;
+        font-weight: 600;
+        margin: 0;
+      }
+
+      .add-chore-btn-primary {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        border-radius: 8px;
+        padding: 8px 14px;
+        color: white;
+        font-size: 0.9em;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      .add-chore-btn-primary:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+
+      .add-chore-btn-primary ha-icon {
+        --mdc-icon-size: 18px;
+      }
+
+      .header-bottom-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .header-dropdowns {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .header-icon-buttons {
+        display: flex;
+        gap: 6px;
+      }
+
+      /* Dropdown styles */
+      .dropdown-container {
+        position: relative;
+      }
+
+      .dropdown-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.15);
+        border: none;
+        border-radius: 8px;
+        padding: 6px 12px;
+        color: white;
+        font-size: 0.85em;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      .dropdown-btn:hover {
+        background: rgba(255, 255, 255, 0.25);
+      }
+
+      .dropdown-btn ha-icon {
+        --mdc-icon-size: 18px;
+      }
+
+      .dropdown-btn .chevron {
+        --mdc-icon-size: 16px;
+        opacity: 0.8;
+      }
+
+      .dropdown-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        margin-top: 4px;
+        background: var(--card-background-color);
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        min-width: 180px;
+        z-index: 100;
+        overflow: hidden;
+      }
+
+      .dropdown-section {
+        padding: 4px 0;
+      }
+
+      .dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        color: var(--primary-text-color);
+        font-size: 0.9em;
+        cursor: pointer;
+        transition: background-color 0.15s;
+      }
+
+      .dropdown-item:hover {
+        background: var(--secondary-background-color);
+      }
+
+      .dropdown-item.active {
+        background: rgba(var(--rgb-primary-color), 0.1);
+        color: var(--primary-color);
+        font-weight: 500;
+      }
+
+      .dropdown-item ha-icon {
+        --mdc-icon-size: 18px;
+        color: var(--secondary-text-color);
+      }
+
+      .dropdown-item.action-item {
+        color: var(--primary-color);
+      }
+
+      .dropdown-item.action-item ha-icon {
+        color: var(--primary-color);
+      }
+
+      .dropdown-divider {
+        height: 1px;
+        background: var(--divider-color);
+        margin: 4px 0;
+      }
+
+      /* Icon buttons in header */
+      .icon-btn {
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        border-radius: 8px;
+        width: 36px;
+        height: 36px;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 12px;
-        flex-wrap: wrap;
+        color: white;
+        cursor: pointer;
+        transition: background-color 0.2s;
       }
-      
+
+      .icon-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+
+      .icon-btn.active {
+        background: rgba(255, 255, 255, 0.3);
+      }
+
+      .icon-btn ha-icon {
+        --mdc-icon-size: 20px;
+      }
+
+      /* Legacy button styles (keep for compatibility) */
       .add-room-btn, .add-chore-btn, .manage-rooms-btn, .history-btn, .my-chores-filter-btn, .view-toggle-btn, .add-user-btn, .manage-users-btn {
         background: rgba(255, 255, 255, 0.2);
         border: none;
@@ -3029,28 +3401,14 @@ class SimpleChoresCard extends LitElement {
         transition: background-color 0.2s;
       }
 
-      .add-room-btn:hover, .add-chore-btn:hover, .manage-rooms-btn:hover, .history-btn:hover, .my-chores-filter-btn:hover, .view-toggle-btn:hover, .add-user-btn:hover, .manage-users-btn:hover {
-        background: rgba(255, 255, 255, 0.3);
-      }
-
-      .my-chores-filter-btn.active {
-        background: var(--primary-color);
+      .room-selector select {
+        padding: 8px 12px;
+        border: none;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.2);
         color: white;
-      }
-
-      .my-chores-filter-btn.active:hover {
-        background: var(--primary-color);
-        opacity: 0.9;
-      }
-
-      .view-toggle-btn.active {
-        background: var(--primary-color);
-        color: white;
-      }
-
-      .view-toggle-btn.active:hover {
-        background: var(--primary-color);
-        opacity: 0.9;
+        font-size: 14px;
+        cursor: pointer;
       }
 
       /* ============================================
@@ -3277,63 +3635,73 @@ class SimpleChoresCard extends LitElement {
 
       .stats {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        grid-template-columns: repeat(3, 1fr);
         gap: 12px;
-        margin-bottom: 24px;
+        margin-bottom: 20px;
       }
-      
+
       .stat {
         display: flex;
         flex-direction: column;
         align-items: center;
-        padding: 16px;
+        justify-content: center;
+        padding: 12px 8px;
         background: var(--card-background-color);
         border: 2px solid var(--divider-color);
         border-radius: 12px;
         transition: all 0.2s ease;
+        min-height: 70px;
       }
-      
+
+      /* Due Today - Green border */
       .stat.attention {
-        border-color: var(--warning-color);
-        background: rgba(var(--warning-color-rgb), 0.1);
+        border-color: #34d399;
+        background: rgba(52, 211, 153, 0.05);
       }
-      
+
+      /* Overdue - Red border */
       .stat.warning {
-        border-color: var(--error-color);
-        background: rgba(var(--error-color-rgb), 0.1);
+        border-color: #f87171;
+        background: rgba(248, 113, 113, 0.05);
       }
-      
+
       .stat-value {
-        font-size: 2em;
-        font-weight: bold;
-        color: var(--primary-color);
+        font-size: 1.75em;
+        font-weight: 700;
+        color: var(--primary-text-color);
+        line-height: 1;
       }
-      
+
       .stat.attention .stat-value {
-        color: var(--warning-color);
+        color: #10b981;
       }
-      
+
       .stat.warning .stat-value {
-        color: var(--error-color);
+        color: #ef4444;
       }
-      
+
       .stat-label {
-        font-size: 0.9em;
+        font-size: 0.75em;
         color: var(--secondary-text-color);
         margin-top: 4px;
+        text-align: center;
       }
-      
+
+      /* Active chores - Cyan border */
       .stat.clickable {
         cursor: pointer;
-        border: 2px solid var(--primary-color);
-        background: rgba(var(--primary-color-rgb), 0.1);
+        border-color: #22d3ee;
+        background: rgba(34, 211, 238, 0.05);
       }
-      
+
+      .stat.clickable .stat-value {
+        color: #06b6d4;
+      }
+
       .stat.clickable:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        border-color: var(--primary-color);
-        background: rgba(var(--primary-color-rgb), 0.15);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        background: rgba(34, 211, 238, 0.1);
       }
       
       .section {
@@ -3350,14 +3718,179 @@ class SimpleChoresCard extends LitElement {
       }
 
       /* ============================================
-         CHORE LISTS & ITEMS
+         CHORE LISTS & ITEMS (Legacy - kept for compatibility)
          ============================================ */
       .chore-list {
         display: flex;
         flex-direction: column;
         gap: 8px;
       }
-      
+
+      /* ============================================
+         NEW COMPACT CHORE CARDS
+         ============================================ */
+      .chore-card {
+        background: var(--card-background-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 12px;
+        padding: 12px 16px;
+        transition: all 0.2s ease;
+      }
+
+      .chore-card:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      }
+
+      .chore-card.overdue {
+        border-color: #fecaca;
+        background: rgba(254, 202, 202, 0.1);
+      }
+
+      .chore-card-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .chore-card-info {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .chore-card-name {
+        font-weight: 500;
+        color: var(--primary-text-color);
+        font-size: 1em;
+        margin-bottom: 4px;
+      }
+
+      .chore-card-meta {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 4px;
+        font-size: 0.8em;
+        color: var(--secondary-text-color);
+      }
+
+      .chore-meta-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+      }
+
+      .chore-meta-item .meta-icon {
+        --mdc-icon-size: 14px;
+        opacity: 0.7;
+      }
+
+      .chore-meta-separator {
+        opacity: 0.5;
+      }
+
+      .chore-meta-item.overdue-text {
+        color: #ef4444;
+        font-weight: 500;
+      }
+
+      .chore-card-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+      }
+
+      .chore-action-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .chore-action-btn.complete {
+        width: 36px;
+        height: 36px;
+        background: #10b981;
+        color: white;
+        margin-right: 6px;
+      }
+
+      .chore-action-btn.complete:hover {
+        background: #059669;
+        transform: scale(1.05);
+      }
+
+      .chore-action-btn.complete ha-icon {
+        --mdc-icon-size: 20px;
+      }
+
+      .chore-action-btn.secondary {
+        width: 32px;
+        height: 32px;
+        background: transparent;
+        color: #9ca3af;
+      }
+
+      .chore-action-btn.secondary:hover {
+        background: var(--secondary-background-color);
+        color: var(--primary-text-color);
+      }
+
+      .chore-action-btn.secondary ha-icon {
+        --mdc-icon-size: 18px;
+      }
+
+      /* Chore overflow menu */
+      .chore-menu-container {
+        position: relative;
+      }
+
+      .chore-overflow-menu {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        margin-top: 4px;
+        background: var(--card-background-color);
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        min-width: 120px;
+        z-index: 50;
+        overflow: hidden;
+      }
+
+      .overflow-menu-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        color: var(--primary-text-color);
+        font-size: 0.9em;
+        cursor: pointer;
+        transition: background-color 0.15s;
+      }
+
+      .overflow-menu-item:hover {
+        background: var(--secondary-background-color);
+      }
+
+      .overflow-menu-item ha-icon {
+        --mdc-icon-size: 18px;
+        color: var(--secondary-text-color);
+      }
+
+      .overflow-menu-item.danger {
+        color: #ef4444;
+      }
+
+      .overflow-menu-item.danger ha-icon {
+        color: #ef4444;
+      }
+
+      /* Legacy chore-item styles (kept for All Chores modal) */
       .chore-item {
         display: flex;
         flex-direction: column;
@@ -3368,57 +3901,57 @@ class SimpleChoresCard extends LitElement {
         transition: all 0.2s ease;
         gap: 12px;
       }
-      
+
       .chore-item:hover {
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         transform: translateY(-1px);
       }
-      
+
       .chore-item.overdue {
         border-color: var(--error-color);
         background: rgba(var(--error-color-rgb), 0.05);
       }
-      
+
       .chore-info {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
         gap: 8px;
       }
-      
+
       .chore-name {
         font-weight: 500;
         color: var(--primary-text-color);
         font-size: 1.1em;
       }
-      
+
       .chore-separator {
         color: var(--secondary-text-color);
         font-weight: bold;
       }
-      
+
       .chore-room {
         font-size: 0.9em;
         color: var(--secondary-text-color);
       }
-      
+
       .chore-due {
         font-size: 0.9em;
         color: var(--accent-color);
         font-weight: 500;
       }
-      
+
       .chore-item.overdue .chore-due {
         color: var(--error-color);
       }
-      
+
       .chore-actions {
         display: flex;
         gap: 8px;
         flex-wrap: wrap;
         justify-content: flex-start;
       }
-      
+
       .chore-actions mwc-button {
         --mdc-button-height: 36px;
         font-size: 0.9em;
