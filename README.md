@@ -88,12 +88,14 @@ The integration creates the following entities:
 
 | Entity | Type | Description |
 |--------|------|-------------|
-| `sensor.simple_chores_due_today` | Sensor | Count of chores due today |
-| `sensor.simple_chores_due_next_7_days` | Sensor | Count of chores due in next 7 days (rolling) |
-| `sensor.simple_chores_overdue` | Sensor | Count of overdue chores |
-| `sensor.simple_chores_total` | Sensor | Total number of chores |
+| `sensor.chores_due_today` | Sensor | Count of chores due today |
+| `sensor.chores_due_next_7_days` | Sensor | Count of chores due in next 7 days (rolling) |
+| `sensor.overdue_chores` | Sensor | Count of overdue chores |
+| `sensor.total_chores` | Sensor | Total number of chores |
 | `binary_sensor.simple_chores_has_overdue` | Binary Sensor | True if any overdue chores |
 | `calendar.simple_chores` | Calendar | Calendar view of all chores |
+
+> **Note:** Sensor entity IDs are defined in `const.py` and used consistently by both the backend and the Lovelace card.
 
 ## Services
 

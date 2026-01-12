@@ -10,7 +10,13 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    SENSOR_DUE_TODAY,
+    SENSOR_DUE_NEXT_7_DAYS,
+    SENSOR_OVERDUE,
+    SENSOR_TOTAL,
+)
 from .coordinator import SimpleChoresCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -37,7 +43,7 @@ async def async_setup_entry(
 class SimpleChoresBaseSensor(CoordinatorEntity[SimpleChoresCoordinator], SensorEntity):
     """Base class for Simple Chores sensors."""
 
-    _attr_has_entity_name = True
+    _attr_has_entity_name = False  # We set explicit entity_id
     _attr_state_class = SensorStateClass.TOTAL
 
     def __init__(
@@ -47,6 +53,7 @@ class SimpleChoresBaseSensor(CoordinatorEntity[SimpleChoresCoordinator], SensorE
         key: str,
         name: str,
         icon: str,
+        sensor_entity_id: str,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
@@ -54,6 +61,7 @@ class SimpleChoresBaseSensor(CoordinatorEntity[SimpleChoresCoordinator], SensorE
         self._attr_name = name
         self._attr_icon = icon
         self._key = key
+        self.entity_id = sensor_entity_id
 
 
 class SimpleChoresDueTodaySensor(SimpleChoresBaseSensor):
@@ -69,6 +77,7 @@ class SimpleChoresDueTodaySensor(SimpleChoresBaseSensor):
             "due_today",
             "Chores Due Today",
             "mdi:clipboard-check-outline",
+            SENSOR_DUE_TODAY,
         )
 
     @property
@@ -114,6 +123,7 @@ class SimpleChoresDueThisWeekSensor(SimpleChoresBaseSensor):
             "due_this_week",
             "Chores Due Next 7 Days",
             "mdi:calendar-clock",
+            SENSOR_DUE_NEXT_7_DAYS,
         )
 
     @property
@@ -160,6 +170,7 @@ class SimpleChoresOverdueSensor(SimpleChoresBaseSensor):
             "overdue",
             "Overdue Chores",
             "mdi:alert-circle-outline",
+            SENSOR_OVERDUE,
         )
 
     @property
@@ -202,6 +213,7 @@ class SimpleChoresTotalSensor(SimpleChoresBaseSensor):
             "total",
             "Total Chores",
             "mdi:clipboard-list-outline",
+            SENSOR_TOTAL,
         )
 
     @property

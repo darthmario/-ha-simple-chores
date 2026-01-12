@@ -79,3 +79,9 @@ MAX_ROOM_NAME_LENGTH: Final = 50
 MAX_CHORE_NAME_LENGTH: Final = 100
 MAX_HISTORY_ENTRIES: Final = 1000
 MAX_CALENDAR_EVENTS: Final = 100  # Maximum events to generate per chore in calendar
+
+# Sensor Entity IDs (used by both backend and frontend card)
+SENSOR_DUE_TODAY: Final = "sensor.chores_due_today"
+SENSOR_DUE_NEXT_7_DAYS: Final = "sensor.chores_due_next_7_days"
+SENSOR_OVERDUE: Final = "sensor.overdue_chores"
+SENSOR_TOTAL: Final = "sensor.total_chores"

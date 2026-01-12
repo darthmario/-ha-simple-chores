@@ -5,7 +5,7 @@
 
 // Card version - update this when releasing new versions
 // This should match the version in manifest.json
-const CARD_VERSION = "1.4.14";
+const CARD_VERSION = "1.4.15";
 
 // Try the most direct approach used by working HA cards
 let LitElement, html, css;
@@ -544,9 +544,9 @@ class SimpleChoresCard extends LitElement {
   }
 
   _renderStats() {
-    const dueToday = this.hass.states["sensor.chores_due_today"]?.state || "0";
-    const overdue = this.hass.states["sensor.overdue_chores"]?.state || "0";
-    const total = this.hass.states["sensor.total_chores"]?.state || "0";
+    const dueToday = this.hass.states[SimpleChoresCard.SENSORS.DUE_TODAY]?.state || "0";
+    const overdue = this.hass.states[SimpleChoresCard.SENSORS.OVERDUE]?.state || "0";
+    const total = this.hass.states[SimpleChoresCard.SENSORS.TOTAL]?.state || "0";
 
     return html`
       <div class="stats">
@@ -689,6 +689,9 @@ class SimpleChoresCard extends LitElement {
       return chore;
     });
 
+    // Get completion history for showing completed chores
+    const completionHistory = this._getCompletionHistorySync();
+
     // Calendar navigation
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'];
@@ -736,7 +739,24 @@ class SimpleChoresCard extends LitElement {
         if (!choresByDate[dateKey]) {
           choresByDate[dateKey] = [];
         }
-        choresByDate[dateKey].push(chore);
+        choresByDate[dateKey].push({ ...chore, isCompleted: false });
+      }
+    });
+
+    // Group completed chores by completion date
+    const completedByDate = {};
+    completionHistory.forEach(entry => {
+      if (entry.completed_at) {
+        const dateKey = entry.completed_at.split('T')[0];
+        if (!completedByDate[dateKey]) {
+          completedByDate[dateKey] = [];
+        }
+        completedByDate[dateKey].push({
+          ...entry,
+          id: entry.chore_id,
+          name: entry.chore_name,
+          isCompleted: true
+        });
       }
     });
 
@@ -767,6 +787,7 @@ class SimpleChoresCard extends LitElement {
 
             const dateStr = `${this._calendarYear}-${String(this._calendarMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const choresOnDate = choresByDate[dateStr] || [];
+            const completedOnDate = completedByDate[dateStr] || [];
             const isToday = dateStr === todayStr;
             const isPast = new Date(dateStr) < new Date(todayStr);
 
@@ -781,15 +802,32 @@ class SimpleChoresCard extends LitElement {
                 <div class="calendar-chores">
                   ${choresOnDate.map(chore => {
                     const isOverdue = isPast;
+                    const roomName = chore.room_name || this._getRoomName(chore.room_id) || '';
                     return html`
                       <div
                         class="calendar-chore ${isOverdue ? 'overdue' : ''}"
                         draggable="true"
                         @dragstart=${(e) => this._handleDragStart(e, chore)}
                         @click=${() => this._openCompleteChoreModal(chore)}
-                        title="${chore.name} - ${chore.room_name || 'Unknown room'}"
+                        title="${chore.name}${roomName ? ` - ${roomName}` : ''}"
                       >
                         <span class="calendar-chore-name">${chore.name}</span>
+                        ${roomName ? html`<span class="calendar-chore-room">${roomName}</span>` : ''}
+                      </div>
+                    `;
+                  })}
+                  ${completedOnDate.map(completed => {
+                    const roomName = completed.room_name || '';
+                    return html`
+                      <div
+                        class="calendar-chore completed"
+                        title="${completed.name}${roomName ? ` - ${roomName}` : ''} - Completed${completed.completed_by_name ? ` by ${completed.completed_by_name}` : ''}"
+                      >
+                        <div class="calendar-chore-content">
+                          <ha-icon icon="mdi:check" class="completed-icon"></ha-icon>
+                          <span class="calendar-chore-name">${completed.name}</span>
+                        </div>
+                        ${roomName ? html`<span class="calendar-chore-room">${roomName}</span>` : ''}
                       </div>
                     `;
                   })}
@@ -808,6 +846,9 @@ class SimpleChoresCard extends LitElement {
           </span>
           <span class="legend-item">
             <span class="legend-box normal"></span> Upcoming
+          </span>
+          <span class="legend-item">
+            <span class="legend-box completed"></span> Completed
           </span>
         </div>
       </div>
@@ -893,12 +934,22 @@ class SimpleChoresCard extends LitElement {
     }
   }
 
+  // Sensor entity IDs - must match const.py
+  static get SENSORS() {
+    return {
+      DUE_TODAY: "sensor.chores_due_today",
+      DUE_NEXT_7_DAYS: "sensor.chores_due_next_7_days",
+      OVERDUE: "sensor.overdue_chores",
+      TOTAL: "sensor.total_chores",
+    };
+  }
+
   _getDueChores(period) {
     if (!this.hass) return [];
 
     const sensorName = period === "today" ?
-      "sensor.chores_due_today" :
-      "sensor.chores_due_this_week";
+      SimpleChoresCard.SENSORS.DUE_TODAY :
+      SimpleChoresCard.SENSORS.DUE_NEXT_7_DAYS;
 
     const chores = this.hass.states[sensorName]?.attributes?.chores || [];
 
@@ -919,7 +970,7 @@ class SimpleChoresCard extends LitElement {
       };
 
       // If this chore is in "due today", and we don't have a specific date, assume today
-      if (sensorName === "sensor.chores_due_today" && !processedChore.next_due) {
+      if (sensorName === SimpleChoresCard.SENSORS.DUE_TODAY && !processedChore.next_due) {
         processedChore.next_due = new Date().toISOString().split('T')[0];
         processedChore.due_date = new Date().toISOString().split('T')[0];
       }
@@ -947,19 +998,10 @@ class SimpleChoresCard extends LitElement {
 
     let users = [];
 
-    // Try to get users from sensor attributes first
-    const possibleTotalSensors = [
-      "sensor.simple_chores_total",
-      "sensor.household_tasks_total",
-      "sensor.total_chores"
-    ];
-
-    for (const sensorName of possibleTotalSensors) {
-      const sensor = this.hass.states[sensorName];
-      if (sensor && sensor.attributes && sensor.attributes.users) {
-        users = sensor.attributes.users;
-        break;
-      }
+    // Try to get users from sensor attributes
+    const sensor = this.hass.states[SimpleChoresCard.SENSORS.TOTAL];
+    if (sensor && sensor.attributes && sensor.attributes.users) {
+      users = sensor.attributes.users;
     }
 
     // Fallback to Home Assistant users from auth registry (if available)
@@ -1032,22 +1074,10 @@ class SimpleChoresCard extends LitElement {
     if (rooms.length === 0) {
       const allSensors = [...simpleChoreSensors, ...householdTaskSensors];
 
-      // Try both possible sensor names for total sensor
-      const possibleTotalSensors = [
-        "sensor.total_chores",
-        "sensor.simple_chores_total",
-        "sensor.household_tasks_total"
-      ];
-
-      for (const sensorName of possibleTotalSensors) {
-        const sensor = this.hass.states[sensorName];
-
-        if (sensor) {
-          if (sensor.attributes && sensor.attributes.rooms) {
-            rooms = sensor.attributes.rooms;
-            break;
-          }
-        }
+      // Get rooms from total sensor
+      const sensor = this.hass.states[SimpleChoresCard.SENSORS.TOTAL];
+      if (sensor && sensor.attributes && sensor.attributes.rooms) {
+        rooms = sensor.attributes.rooms;
       }
 
       // Check each sensor for room data (fallback)
@@ -2184,7 +2214,7 @@ class SimpleChoresCard extends LitElement {
 
   _getAllChores() {
     // Use the enhanced total_chores sensor which now includes all chore data
-    const totalChoresSensor = this.hass.states["sensor.total_chores"];
+    const totalChoresSensor = this.hass.states[SimpleChoresCard.SENSORS.TOTAL];
 
     if (totalChoresSensor && totalChoresSensor.attributes && totalChoresSensor.attributes.chores) {
       return totalChoresSensor.attributes.chores;
@@ -2398,7 +2428,7 @@ class SimpleChoresCard extends LitElement {
 
   _getAllChores() {
     // Use the enhanced total_chores sensor which now includes all chore data
-    const totalChoresSensor = this.hass.states["sensor.total_chores"];
+    const totalChoresSensor = this.hass.states[SimpleChoresCard.SENSORS.TOTAL];
 
     if (totalChoresSensor && totalChoresSensor.attributes && totalChoresSensor.attributes.chores) {
       return totalChoresSensor.attributes.chores;
@@ -2424,9 +2454,13 @@ class SimpleChoresCard extends LitElement {
     } catch (e) {
     }
 
+    // Get room name
+    const roomName = chore.room_name || this._getRoomName(chore.room_id) || '';
+
     this._formData.completion = {
       choreId: chore.id,
       choreName: chore.name,
+      roomName: roomName,
       completedBy: currentUserId, // Default to current user
       reassignTo: chore.assigned_to || "" // Keep current assignment by default
     };
@@ -2449,9 +2483,13 @@ class SimpleChoresCard extends LitElement {
     } catch (e) {
     }
 
+    // Get room name
+    const roomName = chore.room_name || this._getRoomName(chore.room_id) || '';
+
     this._formData.completion = {
       choreId: chore.id,
       choreName: chore.name,
+      roomName: roomName,
       completedBy: currentUserId,
       reassignTo: chore.assigned_to || ""
     };
@@ -2625,22 +2663,12 @@ class SimpleChoresCard extends LitElement {
 
   async _getCompletionHistory() {
     try {
-      // Try multiple possible sensor names
-      const possibleTotalSensors = [
-        "sensor.total_chores",
-        "sensor.simple_chores_total",
-        "sensor.household_tasks_total"
-      ];
+      const totalChoresSensor = this.hass.states[SimpleChoresCard.SENSORS.TOTAL];
 
-      for (const sensorName of possibleTotalSensors) {
-        const totalChoresSensor = this.hass.states[sensorName];
-
-        if (totalChoresSensor && totalChoresSensor.attributes && totalChoresSensor.attributes.completion_history) {
-          const history = totalChoresSensor.attributes.completion_history;
-
-          // Sort by completion date (newest first)
-          return history.sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
-        }
+      if (totalChoresSensor && totalChoresSensor.attributes && totalChoresSensor.attributes.completion_history) {
+        const history = totalChoresSensor.attributes.completion_history;
+        // Sort by completion date (newest first)
+        return history.sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
       }
 
       return [];
@@ -2648,6 +2676,22 @@ class SimpleChoresCard extends LitElement {
     } catch (error) {
       console.error("Simple Chores Card: Failed to get completion history:", error);
       this._showToast("Error loading completion history");
+      return [];
+    }
+  }
+
+  _getCompletionHistorySync() {
+    // Synchronous version for calendar rendering
+    try {
+      const totalChoresSensor = this.hass.states[SimpleChoresCard.SENSORS.TOTAL];
+
+      if (totalChoresSensor && totalChoresSensor.attributes && totalChoresSensor.attributes.completion_history) {
+        return totalChoresSensor.attributes.completion_history || [];
+      }
+
+      return [];
+    } catch (error) {
+      console.error("Simple Chores Card: Failed to get completion history sync:", error);
       return [];
     }
   }
@@ -2739,6 +2783,9 @@ class SimpleChoresCard extends LitElement {
           <div class="modal-body">
             <div class="completion-info">
               <h4>📋 ${this._formData.completion.choreName}</h4>
+              ${this._formData.completion.roomName ? html`
+                <p class="completion-room"><ha-icon icon="mdi:home"></ha-icon> ${this._formData.completion.roomName}</p>
+              ` : ''}
               <p>Mark this chore as completed and optionally reassign for next time.</p>
             </div>
             
@@ -3116,8 +3163,6 @@ class SimpleChoresCard extends LitElement {
         cursor: grab;
         transition: all 0.2s;
         overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
       }
 
       .calendar-chore:hover {
@@ -3133,10 +3178,41 @@ class SimpleChoresCard extends LitElement {
         background: var(--error-color);
       }
 
+      .calendar-chore.completed {
+        background: var(--success-color, #4CAF50);
+        opacity: 0.7;
+        cursor: default;
+      }
+
+      .calendar-chore.completed .calendar-chore-name {
+        text-decoration: line-through;
+      }
+
+      .calendar-chore.completed .completed-icon {
+        --mdc-icon-size: 12px;
+        flex-shrink: 0;
+      }
+
       .calendar-chore-name {
         display: block;
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+
+      .calendar-chore-room {
+        display: block;
+        font-size: 0.65rem;
+        opacity: 0.85;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-top: 1px;
+      }
+
+      .calendar-chore-content {
+        display: flex;
+        align-items: center;
+        gap: 4px;
       }
 
       .calendar-legend {
@@ -3175,6 +3251,10 @@ class SimpleChoresCard extends LitElement {
         background: var(--primary-color);
       }
 
+      .legend-box.completed {
+        background: var(--success-color, #4CAF50);
+        opacity: 0.7;
+      }
 
       .room-selector select {
         padding: 8px 12px;
@@ -3539,6 +3619,23 @@ class SimpleChoresCard extends LitElement {
       
       .modal-body {
         padding: 0 20px 20px 20px;
+      }
+
+      .completion-info h4 {
+        margin: 0 0 8px 0;
+      }
+
+      .completion-room {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--secondary-text-color);
+        font-size: 0.9em;
+        margin: 0 0 12px 0;
+      }
+
+      .completion-room ha-icon {
+        --mdc-icon-size: 16px;
       }
 
       /* ============================================
