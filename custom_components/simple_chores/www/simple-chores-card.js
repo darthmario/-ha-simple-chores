@@ -5,7 +5,7 @@
 
 // Card version - update this when releasing new versions
 // This should match the version in manifest.json
-const CARD_VERSION = "1.4.17";
+const CARD_VERSION = "1.5.0";
 
 // Try the most direct approach used by working HA cards
 let LitElement, html, css;
@@ -772,7 +772,16 @@ class SimpleChoresCard extends LitElement {
   }
 
 
-  _renderChore(chore) {
+  /**
+   * Render a chore card with the compact inline layout.
+   * @param {Object} chore - The chore data
+   * @param {Object} options - Optional configuration
+   * @param {boolean} options.inModal - Whether rendering inside a modal (uses modal-specific handlers)
+   * @param {boolean} options.showFrequency - Whether to show the frequency in metadata
+   */
+  _renderChore(chore, options = {}) {
+    const { inModal = false, showFrequency = false } = options;
+
     // Handle different property names from different data sources
     let dueDate = chore.next_due || chore.due_date || chore.date;
 
@@ -796,6 +805,23 @@ class SimpleChoresCard extends LitElement {
     const isOverdue = new Date(dueDate) < new Date().setHours(0,0,0,0);
     const isMenuOpen = this._activeChoreMenu === chore.id;
 
+    // Use modal-specific handlers if in modal context
+    const completeHandler = inModal
+      ? () => this._openCompleteChoreModalFromAllChores(chore)
+      : () => this._openCompleteChoreModal(chore);
+    const snoozeHandler = inModal
+      ? () => this._snoozeChoreFromModal(chore.id)
+      : () => this._snoozeChore(chore.id);
+    const skipHandler = inModal
+      ? () => this._skipChoreFromModal(chore.id)
+      : () => this._skipChore(chore.id);
+    const editHandler = inModal
+      ? () => this._editChoreFromModal(chore)
+      : () => this._editChore(chore);
+    const deleteHandler = inModal
+      ? () => this._deleteChoreFromModal(chore.id, chore.name)
+      : () => this._deleteChore(chore.id, chore.name);
+
     return html`
       <div class="chore-card ${isOverdue ? 'overdue' : ''}">
         <div class="chore-card-content">
@@ -810,6 +836,10 @@ class SimpleChoresCard extends LitElement {
               <span class="chore-meta-item ${isOverdue ? 'overdue-text' : ''}">
                 Due: ${this._formatDate(dueDate)}
               </span>
+              ${showFrequency ? html`
+                <span class="chore-meta-separator">·</span>
+                <span class="chore-meta-item">${this._formatFrequency(chore.frequency)}</span>
+              ` : ''}
               ${assignedUserName ? html`
                 <span class="chore-meta-separator">·</span>
                 <span class="chore-meta-item">
@@ -822,21 +852,21 @@ class SimpleChoresCard extends LitElement {
           <div class="chore-card-actions">
             <button
               class="chore-action-btn complete"
-              @click=${() => this._openCompleteChoreModal(chore)}
+              @click=${completeHandler}
               title="Complete"
             >
               <ha-icon icon="mdi:check"></ha-icon>
             </button>
             <button
               class="chore-action-btn secondary"
-              @click=${() => this._snoozeChore(chore.id)}
+              @click=${snoozeHandler}
               title="Snooze 1 day"
             >
               <ha-icon icon="mdi:clock-outline"></ha-icon>
             </button>
             <button
               class="chore-action-btn secondary"
-              @click=${() => this._skipChore(chore.id)}
+              @click=${skipHandler}
               title="Skip to next"
             >
               <ha-icon icon="mdi:skip-next"></ha-icon>
@@ -851,11 +881,11 @@ class SimpleChoresCard extends LitElement {
               </button>
               ${isMenuOpen ? html`
                 <div class="chore-overflow-menu">
-                  <div class="overflow-menu-item" @click=${() => this._editChoreFromMenu(chore)}>
+                  <div class="overflow-menu-item" @click=${() => { this._activeChoreMenu = null; editHandler(); }}>
                     <ha-icon icon="mdi:pencil"></ha-icon>
                     Edit
                   </div>
-                  <div class="overflow-menu-item danger" @click=${() => this._deleteChoreFromMenu(chore.id, chore.name)}>
+                  <div class="overflow-menu-item danger" @click=${() => { this._activeChoreMenu = null; deleteHandler(); }}>
                     <ha-icon icon="mdi:trash-can"></ha-icon>
                     Delete
                   </div>
@@ -873,16 +903,6 @@ class SimpleChoresCard extends LitElement {
     this._showRoomDropdown = false;
     this._showAssigneeDropdown = false;
     this._activeChoreMenu = this._activeChoreMenu === choreId ? null : choreId;
-  }
-
-  _editChoreFromMenu(chore) {
-    this._activeChoreMenu = null;
-    this._editChore(chore);
-  }
-
-  _deleteChoreFromMenu(choreId, choreName) {
-    this._activeChoreMenu = null;
-    this._deleteChore(choreId, choreName);
   }
 
   _renderCalendarView() {
@@ -2453,7 +2473,6 @@ class SimpleChoresCard extends LitElement {
     const rawChores = this._getAllChores();
     const roomFiltered = this._filterChoresByRoom(rawChores);
     const allChores = this._filterChoresByUser(roomFiltered);
-    const rooms = this._getRooms();
 
     return html`
       <div class="modal-overlay" @click=${this._closeAllChoresModal}>
@@ -2464,7 +2483,7 @@ class SimpleChoresCard extends LitElement {
               <ha-icon icon="mdi:close"></ha-icon>
             </button>
           </div>
-          <div class="modal-body">
+          <div class="modal-body" @click=${this._handleContentClick}>
             ${allChores.length === 0 ? html`
               <div class="no-chores">
                 <p>No active chores found.</p>
@@ -2472,76 +2491,7 @@ class SimpleChoresCard extends LitElement {
               </div>
             ` : html`
               <div class="all-chores-list">
-                ${allChores.map(chore => {
-                  const dueDate = chore.next_due || chore.due_date;
-                  
-                  // Use consolidated room lookup logic
-                  const roomName = this._resolveRoomName(chore, rooms);
-                  
-                  // Get assigned user info
-                  const assignedTo = chore.assigned_to;
-                  let assignedUserName = null;
-                  if (assignedTo) {
-                    const users = this._getUsers();
-                    const assignedUser = users.find(u => u.id === assignedTo);
-                    assignedUserName = assignedUser ? assignedUser.name : assignedTo;
-                  }
-                  
-                  const isOverdue = new Date(dueDate) < new Date().setHours(0,0,0,0);
-                  
-                  return html`
-                    <div class="chore-item ${isOverdue ? 'overdue' : ''}">
-                      <div class="chore-info">
-                        <span class="chore-name">${chore.name}</span>
-                        <span class="chore-separator">•</span>
-                        <span class="chore-room">${roomName}</span>
-                        <span class="chore-separator">•</span>
-                        <span class="chore-due">Due: ${this._formatDate(dueDate)}</span>
-                        <span class="chore-separator">•</span>
-                        <span class="chore-frequency">${this._formatFrequency(chore.frequency)}</span>
-                        ${assignedUserName ? html`
-                          <span class="chore-separator">•</span>
-                          <span class="chore-assigned">👤 ${assignedUserName}</span>
-                        ` : ''}
-                      </div>
-                      <div class="chore-actions">
-                        <button 
-                          @click=${() => this._editChoreFromModal(chore)}
-                          class="action-btn edit-btn"
-                          title="Edit Chore"
-                        >
-                          ✏️ Edit
-                        </button>
-                        <button 
-                          @click=${() => this._deleteChoreFromModal(chore.id, chore.name)}
-                          class="action-btn delete-btn"
-                          title="Delete Chore"
-                        >
-                          🗑️ Delete
-                        </button>
-                        <button 
-                          @click=${() => this._openCompleteChoreModalFromAllChores(chore)}
-                          class="action-btn complete-btn"
-                        >
-                          ✓ Complete
-                        </button>
-                        <button
-                          @click=${() => this._skipChoreFromModal(chore.id)}
-                          class="action-btn skip-btn"
-                        >
-                          ⏭ Skip
-                        </button>
-                        <button
-                          @click=${() => this._snoozeChoreFromModal(chore.id)}
-                          class="action-btn snooze-btn"
-                          title="Snooze for 1 day"
-                        >
-                          ⏰ Snooze
-                        </button>
-                      </div>
-                    </div>
-                  `;
-                })}
+                ${allChores.map(chore => this._renderChore(chore, { inModal: true, showFrequency: true }))}
               </div>
             `}
           </div>
@@ -3238,7 +3188,7 @@ class SimpleChoresCard extends LitElement {
         border-radius: 8px;
         padding: 8px 14px;
         color: white;
-        font-size: 0.9em;
+        font-size: 0.6em;
         font-weight: 500;
         cursor: pointer;
         transition: background-color 0.2s;
@@ -3284,7 +3234,7 @@ class SimpleChoresCard extends LitElement {
         border-radius: 8px;
         padding: 6px 12px;
         color: white;
-        font-size: 0.85em;
+        font-size: 0.6em;
         cursor: pointer;
         transition: background-color 0.2s;
       }
@@ -3325,7 +3275,7 @@ class SimpleChoresCard extends LitElement {
         gap: 8px;
         padding: 10px 14px;
         color: var(--primary-text-color);
-        font-size: 0.9em;
+        font-size: 0.6em;
         cursor: pointer;
         transition: background-color 0.15s;
       }

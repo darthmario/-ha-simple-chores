@@ -209,9 +209,12 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Get all users (HA users + custom users)."""
         users = []
 
-        # Get Home Assistant users
+        # Get Home Assistant users (filter out system-generated accounts)
         ha_users = await self.hass.auth.async_get_users()
         for user in ha_users:
+            # Skip system-generated users (Supervisor, Home Assistant Cloud, etc.)
+            if user.system_generated:
+                continue
             if user.is_active:
                 users.append({
                     "id": user.id,
