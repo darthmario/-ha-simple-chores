@@ -216,6 +216,15 @@ The Simple Chores card is **automatically copied to the correct location** when 
 
 **Calendar Default**: Set `default_view: "calendar"` to open the card in calendar view by default, great for planning ahead.
 
+### 🔄 Automatic Cache Busting
+
+The card automatically busts the browser cache when you update to a new version via HACS. The integration appends the version number to the resource URL (e.g., `?v=1.0.0`), so when you update, browsers fetch the new version automatically.
+
+**Manual cache clearing (if needed):**
+- **Browser**: `Ctrl+Shift+R` (Windows/Linux) or `Cmd+Shift+R` (Mac)
+- **iOS App**: Settings → Companion App → Debugging → Reset frontend cache
+- **Android App**: App Info → Storage → Clear Cache
+
 ### 🔧 Manual Installation (Alternative Method)
 
 If you prefer to copy the file manually:

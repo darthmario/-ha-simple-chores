@@ -1,6 +1,7 @@
 """Frontend resource registration for Simple Chores custom card."""
 from __future__ import annotations
 
+import json
 import logging
 import os
 import shutil
@@ -10,6 +11,22 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _get_integration_version() -> str:
+    """Read version from manifest.json for cache busting.
+
+    Returns:
+        Version string from manifest, or 'unknown' if not found.
+    """
+    try:
+        manifest_path = os.path.join(os.path.dirname(__file__), "manifest.json")
+        with open(manifest_path, encoding="utf-8") as f:
+            manifest = json.load(f)
+            return manifest.get("version", "unknown")
+    except (OSError, json.JSONDecodeError) as err:
+        _LOGGER.warning("Could not read version from manifest: %s", err)
+        return "unknown"
 
 
 async def register_frontend_resources(hass: HomeAssistant, domain: str) -> None:
@@ -69,7 +86,12 @@ async def _register_hacs_compatible(
         # Define target directory following HACS convention
         target_dir = hass.config.path(f"www/community/{domain}")
         target_file = os.path.join(target_dir, "simple-chores-card.js")
-        card_url = f"/local/community/{domain}/simple-chores-card.js"
+
+        # Get version for cache busting
+        version = _get_integration_version()
+        card_url = f"/local/community/{domain}/simple-chores-card.js?v={version}"
+
+        _LOGGER.debug("Using version %s for cache busting", version)
 
         # Copy file to HACS community folder (async to avoid blocking)
         def _copy_card_file() -> None:
@@ -83,11 +105,11 @@ async def _register_hacs_compatible(
         # Register with Home Assistant frontend
         add_extra_js_url(hass, card_url)
 
-        _LOGGER.info("Successfully registered Simple Chores card")
+        _LOGGER.info("Successfully registered Simple Chores card v%s", version)
         _LOGGER.info("Card URL: %s", card_url)
         _LOGGER.info(
             "The card should be automatically available. "
-            "If not, manually add the URL above to Lovelace resources."
+            "Cache will refresh automatically on version updates."
         )
 
     except ImportError:
