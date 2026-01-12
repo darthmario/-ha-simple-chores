@@ -186,9 +186,35 @@ The Simple Chores card is **automatically copied to the correct location** when 
    **Method B: Manual YAML** ⌨️
    ```yaml
    type: custom:simple-chores-card
+   title: "Family Chores"
+   default_view: calendar
+   full_width: true
+   compact_mode: false
+   hide_stats: false
+   my_chores_default: false
    show_completed: false
-   default_room: all
    ```
+
+### Card Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `title` | string | `"Simple Chores"` | Custom card title (e.g., "Family Tasks", "House Chores") |
+| `default_view` | string | `"list"` | Default view on load: `"list"` or `"calendar"` |
+| `full_width` | boolean | `false` | Make card span full column width (great for calendar view) |
+| `compact_mode` | boolean | `false` | Reduced padding/spacing for smaller displays or sidebars |
+| `hide_stats` | boolean | `false` | Hide the stats bar (Due Today, Overdue, Total counts) |
+| `my_chores_default` | boolean | `false` | Start with "My Chores" filter enabled |
+| `show_completed` | boolean | `false` | Show completed one-off chores |
+| `default_room` | string | `"all"` | Default room filter on load |
+
+#### Display Modes
+
+**Full Width Mode**: Set `full_width: true` to make the card span the entire width of your dashboard column. Perfect for the calendar view.
+
+**Compact Mode**: Set `compact_mode: true` to reduce padding and spacing throughout the card. Ideal for sidebar placements or smaller dashboard panels.
+
+**Calendar Default**: Set `default_view: "calendar"` to open the card in calendar view by default, great for planning ahead.
 
 ### 🔧 Manual Installation (Alternative Method)
 

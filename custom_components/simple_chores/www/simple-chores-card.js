@@ -418,12 +418,30 @@ class SimpleChoresCard extends LitElement {
     this.config = {
       show_completed: false,
       default_room: "all",
+      full_width: false,
+      default_view: "list",
+      my_chores_default: false,
+      title: "Simple Chores",
+      hide_stats: false,
+      compact_mode: false,
       ...config
     };
+
+    // Apply config to initial state if not already set
+    if (this._currentView === "list" && this.config.default_view === "calendar") {
+      this._currentView = "calendar";
+    }
+    if (!this._showMyChoresOnly && this.config.my_chores_default) {
+      this._showMyChoresOnly = true;
+    }
+    if (this._selectedRoom === "all" && this.config.default_room !== "all") {
+      this._selectedRoom = this.config.default_room;
+    }
   }
 
   getCardSize() {
-    return 6;
+    // Return larger size for full-width mode to help HA allocate space
+    return this.config?.full_width ? 8 : 6;
   }
 
   render() {
@@ -435,10 +453,15 @@ class SimpleChoresCard extends LitElement {
     const dueThisWeek = this._getDueChores("week");
     const rooms = this._getRooms();
 
+    const cardClasses = [
+      this.config.full_width ? 'full-width' : '',
+      this.config.compact_mode ? 'compact' : ''
+    ].filter(Boolean).join(' ');
+
     return html`
-      <ha-card>
+      <ha-card class="${cardClasses}">
         <div class="card-header">
-          <div class="card-title">Simple Chores</div>
+          <div class="card-title">${this.config.title}</div>
           <div class="header-controls">
             <div class="room-selector">
               <select @change=${this._roomChanged}>
@@ -487,7 +510,7 @@ class SimpleChoresCard extends LitElement {
         
         <div class="card-content">
           ${this._currentView === 'list' ? html`
-            ${this._renderStats()}
+            ${!this.config.hide_stats ? this._renderStats() : ''}
             ${this._renderChoreList(dueToday, "Due Today")}
             ${this._renderChoreList(dueThisWeek, "Due in Next 7 Days")}
           ` : html`
@@ -2865,6 +2888,48 @@ class SimpleChoresCard extends LitElement {
         display: block;
       }
 
+      /* Full width mode - makes card span entire column width */
+      ha-card.full-width {
+        grid-column: 1 / -1;
+      }
+
+      /* Compact mode - reduced spacing for smaller displays */
+      ha-card.compact .card-header {
+        padding: 8px 12px;
+      }
+
+      ha-card.compact .card-title {
+        font-size: 1.1em;
+        margin-bottom: 8px;
+      }
+
+      ha-card.compact .card-content {
+        padding: 8px;
+      }
+
+      ha-card.compact .chore-section {
+        padding: 8px;
+        margin-bottom: 8px;
+      }
+
+      ha-card.compact .chore-item {
+        padding: 6px 8px;
+      }
+
+      ha-card.compact .stats {
+        padding: 8px;
+        gap: 8px;
+      }
+
+      ha-card.compact .stat {
+        padding: 6px 10px;
+      }
+
+      ha-card.compact .calendar-cell {
+        min-height: 60px;
+        padding: 2px;
+      }
+
       /* ============================================
          HEADER & CONTROLS
          ============================================ */
@@ -3736,6 +3801,30 @@ class SimpleChoresCardEditor extends LitElement {
     return this._config?.default_room || "all";
   }
 
+  get _full_width() {
+    return this._config?.full_width || false;
+  }
+
+  get _default_view() {
+    return this._config?.default_view || "list";
+  }
+
+  get _my_chores_default() {
+    return this._config?.my_chores_default || false;
+  }
+
+  get _title() {
+    return this._config?.title || "Simple Chores";
+  }
+
+  get _hide_stats() {
+    return this._config?.hide_stats || false;
+  }
+
+  get _compact_mode() {
+    return this._config?.compact_mode || false;
+  }
+
   render() {
     if (!this.hass) {
       return html``;
@@ -3743,8 +3832,75 @@ class SimpleChoresCardEditor extends LitElement {
 
     return html`
       <div class="card-config">
+        <div class="section-header">Display Settings</div>
+
         <div class="option">
-          <ha-formfield label="Show completed chores">
+          <label class="option-label">Card Title</label>
+          <input
+            type="text"
+            .value=${this._title}
+            .configValue=${"title"}
+            @input=${this._valueChanged}
+            placeholder="Simple Chores"
+          />
+        </div>
+
+        <div class="option">
+          <label class="option-label">Default View</label>
+          <select
+            .value=${this._default_view}
+            .configValue=${"default_view"}
+            @change=${this._valueChanged}
+          >
+            <option value="list" ?selected=${this._default_view === "list"}>List View</option>
+            <option value="calendar" ?selected=${this._default_view === "calendar"}>Calendar View</option>
+          </select>
+        </div>
+
+        <div class="option">
+          <ha-formfield label="Full width (spans entire column)">
+            <ha-checkbox
+              .checked=${this._full_width}
+              .configValue=${"full_width"}
+              @change=${this._valueChanged}
+            ></ha-checkbox>
+          </ha-formfield>
+        </div>
+
+        <div class="option">
+          <ha-formfield label="Compact mode (smaller spacing)">
+            <ha-checkbox
+              .checked=${this._compact_mode}
+              .configValue=${"compact_mode"}
+              @change=${this._valueChanged}
+            ></ha-checkbox>
+          </ha-formfield>
+        </div>
+
+        <div class="option">
+          <ha-formfield label="Hide stats bar">
+            <ha-checkbox
+              .checked=${this._hide_stats}
+              .configValue=${"hide_stats"}
+              @change=${this._valueChanged}
+            ></ha-checkbox>
+          </ha-formfield>
+        </div>
+
+        <div class="section-header">Default Filters</div>
+
+        <div class="option">
+          <ha-formfield label="Show only my chores by default">
+            <ha-checkbox
+              .checked=${this._my_chores_default}
+              .configValue=${"my_chores_default"}
+              @change=${this._valueChanged}
+            ></ha-checkbox>
+          </ha-formfield>
+        </div>
+
+        <div class="option">
+          <ha-formfield label="Show completed one-off chores">
             <ha-checkbox
               .checked=${this._show_completed}
               .configValue=${"show_completed"}
@@ -3752,25 +3908,12 @@ class SimpleChoresCardEditor extends LitElement {
             ></ha-checkbox>
           </ha-formfield>
         </div>
-        <div class="option">
-          <paper-dropdown-menu
-            label="Default room filter"
-            .configValue=${"default_room"}
-            @value-changed=${this._valueChanged}
-          >
-            <paper-listbox
-              slot="dropdown-content"
-              .selected=${["all"].indexOf(this._default_room)}
-            >
-              <paper-item>All Rooms</paper-item>
-            </paper-listbox>
-          </paper-dropdown-menu>
-        </div>
+
         <div class="info">
           <p>
             <strong>Simple Chores Card</strong><br>
-            A beautiful card for managing your household chores with room filtering,
-            completion tracking, and modern design.
+            Manage household chores with room filtering, calendar view,
+            user assignment, and completion tracking.
           </p>
         </div>
       </div>
@@ -3813,8 +3956,47 @@ class SimpleChoresCardEditor extends LitElement {
       .card-config {
         padding: 16px;
       }
+      .section-header {
+        font-weight: 500;
+        font-size: 0.9em;
+        color: var(--primary-color);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 12px;
+        margin-top: 16px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid var(--divider-color);
+      }
+      .section-header:first-child {
+        margin-top: 0;
+      }
       .option {
         margin-bottom: 16px;
+      }
+      .option-label {
+        display: block;
+        font-size: 0.9em;
+        color: var(--secondary-text-color);
+        margin-bottom: 4px;
+      }
+      .option input[type="text"],
+      .option select {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid var(--divider-color);
+        border-radius: 4px;
+        background: var(--card-background-color);
+        color: var(--primary-text-color);
+        font-size: 1em;
+        box-sizing: border-box;
+      }
+      .option input[type="text"]:focus,
+      .option select:focus {
+        outline: none;
+        border-color: var(--primary-color);
+      }
+      .option select {
+        cursor: pointer;
       }
       .info {
         margin-top: 24px;
