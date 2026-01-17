@@ -2,10 +2,10 @@
  * Simple Chores Card
  * A custom Lovelace card for managing simple chores
  */
-Great
+
 // Card version - update this when releasing new versions
 // This should match the version in manifest.json
-const CARD_VERSION = "1.5.1";
+const CARD_VERSION = "1.5.4";
 
 // Try the most direct approach used by working HA cards
 let LitElement, html, css;
