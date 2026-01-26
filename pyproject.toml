@@ -29,7 +29,8 @@ ignore = [
     "ARG001", # unused function argument (common in HA)
     "ARG002", # unused method argument (common in HA)
     "SIM108", # use ternary operator (often less readable)
-    "PTH123", # use Path.open instead of open (HA uses open)
+    "SIM116", # use dictionary instead of if statements (less readable for small cases)
+    "PTH",    # use pathlib (HA codebase uses os.path)
     "TC001",  # move type-only import into TYPE_CHECKING block
     "TC002",  # move third-party import into TYPE_CHECKING block
     "TC003",  # move stdlib import into TYPE_CHECKING block

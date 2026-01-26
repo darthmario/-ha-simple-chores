@@ -57,7 +57,7 @@ async def register_frontend_resources(hass: HomeAssistant, domain: str) -> None:
         # Register using HACS-compatible approach
         await _register_hacs_compatible(hass, domain, card_file)
 
-    except (OSError, IOError) as err:
+    except OSError as err:
         _LOGGER.error("File system error during frontend registration: %s", err, exc_info=True)
     except Exception:
         _LOGGER.exception("Unexpected error registering frontend resources")
@@ -118,7 +118,7 @@ async def _register_hacs_compatible(
             "This Home Assistant version may not support automatic card registration."
         )
         _logger_manual_instructions(domain)
-    except (OSError, IOError, PermissionError) as err:
+    except OSError as err:
         _LOGGER.error("Failed to copy card file: %s", err, exc_info=True)
         _logger_manual_instructions(domain)
     except Exception:

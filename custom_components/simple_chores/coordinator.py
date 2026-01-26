@@ -3,15 +3,16 @@ from __future__ import annotations
 
 import calendar
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any
 
 from dateutil.relativedelta import relativedelta
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
+    ANCHOR_DAY_OF_MONTH,
+    ANCHOR_WEEK_PATTERN,
     DOMAIN,
     FREQUENCY_BIANNUAL,
     FREQUENCY_BIMONTHLY,
@@ -22,11 +23,9 @@ from .const import (
     FREQUENCY_QUARTERLY,
     FREQUENCY_WEEKLY,
     FREQUENCY_YEARLY,
-    ROOM_PREFIX_AREA,
     RECURRENCE_ANCHORED,
     RECURRENCE_INTERVAL,
-    ANCHOR_DAY_OF_MONTH,
-    ANCHOR_WEEK_PATTERN,
+    ROOM_PREFIX_AREA,
     WEEK_LAST,
 )
 from .store import SimpleChoresStore
@@ -390,10 +389,10 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "chores": all_active_chores,
             "total_chores": len(all_active_chores),
         }
-        
-        _LOGGER.debug("Data update complete. Total chores: %d, Due today: %d, Due this week: %d, Overdue: %d", 
+
+        _LOGGER.debug("Data update complete. Total chores: %d, Due today: %d, Due this week: %d, Overdue: %d",
                      len(self.store.chores), len(due_today), len(due_this_week), len(overdue))
-        
+
         return result
 
     async def _get_all_rooms(self) -> list[dict[str, Any]]:

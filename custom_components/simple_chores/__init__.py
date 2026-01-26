@@ -257,11 +257,11 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 class ServiceHandlerFactory:
     """Factory for creating service handlers with common patterns."""
-    
+
     def __init__(self, coordinator: SimpleChoresCoordinator, hass: HomeAssistant):
         self.coordinator = coordinator
         self.hass = hass
-    
+
     def create_room_handler(self, operation: str) -> Callable[[ServiceCall], Awaitable[None]]:
         """Create a room operation handler."""
         async def handler(call: ServiceCall) -> None:
@@ -432,9 +432,9 @@ async def _async_setup_services(
     hass: HomeAssistant, coordinator: SimpleChoresCoordinator
 ) -> None:
     """Set up services for the integration using factory pattern."""
-    
+
     factory = ServiceHandlerFactory(coordinator, hass)
-    
+
     # Service configuration: (service_name, handler_factory_method, schema)
     service_configs = [
         # Room services
@@ -458,11 +458,11 @@ async def _async_setup_services(
         # Data services
         (SERVICE_GET_HISTORY, factory.create_data_handler("history"), SERVICE_GET_HISTORY_SCHEMA),
         (SERVICE_GET_USER_STATS, factory.create_data_handler("stats"), None),
-        
+
         # Notification service
         (SERVICE_SEND_NOTIFICATION, factory.create_notification_handler(), None),
     ]
-    
+
     # Register all services using the factory pattern
     for service_name, handler, schema in service_configs:
         hass.services.async_register(
