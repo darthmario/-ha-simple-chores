@@ -1,7 +1,6 @@
 """The Simple Chores integration."""
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import date, datetime, time, timedelta
 from typing import Any, Awaitable, Callable
@@ -15,31 +14,28 @@ from homeassistant.exceptions import HomeAssistantError, ServiceNotFound
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import async_track_time_change
 
+from . import frontend_resources
 from .const import (
+    ANCHOR_TYPES,
+    ATTR_ANCHOR_DAY_OF_MONTH,
+    ATTR_ANCHOR_DAYS_OF_WEEK,
+    ATTR_ANCHOR_TYPE,
+    ATTR_ANCHOR_WEEK,
+    ATTR_ANCHOR_WEEKDAY,
     ATTR_ASSIGNED_TO,
     ATTR_AVATAR,
     ATTR_CHORE_ID,
     ATTR_CHORE_NAME,
     ATTR_FREQUENCY,
     ATTR_ICON,
+    ATTR_INTERVAL,
     ATTR_NEXT_DUE,
+    ATTR_RECURRENCE_TYPE,
     ATTR_ROOM_ID,
     ATTR_ROOM_NAME,
     ATTR_START_DATE,
     ATTR_USER_ID,
     ATTR_USER_NAME,
-    # Recurrence attributes
-    ATTR_RECURRENCE_TYPE,
-    ATTR_ANCHOR_DAYS_OF_WEEK,
-    ATTR_ANCHOR_TYPE,
-    ATTR_ANCHOR_DAY_OF_MONTH,
-    ATTR_ANCHOR_WEEK,
-    ATTR_ANCHOR_WEEKDAY,
-    ATTR_INTERVAL,
-    RECURRENCE_TYPES,
-    ANCHOR_TYPES,
-    WEEKDAYS,
-    WEEK_ORDINALS,
     CONF_NOTIFICATION_TIME,
     CONF_NOTIFICATIONS_ENABLED,
     CONF_NOTIFY_DAYS_BEFORE,
@@ -49,6 +45,7 @@ from .const import (
     DEFAULT_NOTIFY_DAYS_BEFORE,
     DOMAIN,
     FREQUENCIES,
+    RECURRENCE_TYPES,
     SERVICE_ADD_CHORE,
     SERVICE_ADD_ROOM,
     SERVICE_ADD_USER,
@@ -64,8 +61,9 @@ from .const import (
     SERVICE_UPDATE_CHORE,
     SERVICE_UPDATE_ROOM,
     SERVICE_UPDATE_USER,
+    WEEK_ORDINALS,
+    WEEKDAYS,
 )
-from . import frontend_resources
 from .coordinator import SimpleChoresCoordinator
 from .store import SimpleChoresStore
 

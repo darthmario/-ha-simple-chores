@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import uuid
 from datetime import date, datetime, timedelta
@@ -103,7 +104,7 @@ class SimpleChoresStore:
             except Exception:
                 _LOGGER.exception("Unexpected error in debounced save")
                 raise  # Re-raise unexpected errors
-        
+
         self._save_task = asyncio.create_task(_delayed_save())
 
     async def async_flush_debounced_save(self) -> None:
@@ -111,10 +112,8 @@ class SimpleChoresStore:
         # Cancel pending save task
         if self._save_task and not self._save_task.done():
             self._save_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._save_task
-            except asyncio.CancelledError:
-                pass
 
         # Save immediately if there are pending changes
         if self._dirty:
@@ -129,7 +128,7 @@ class SimpleChoresStore:
             raise ValueError("Room name cannot be empty")
         if len(name.strip()) > MAX_ROOM_NAME_LENGTH:
             raise ValueError(f"Room name too long (max {MAX_ROOM_NAME_LENGTH} characters)")
-        
+
         room_id = f"custom_{uuid.uuid4().hex[:8]}"
         room = {
             "id": room_id,
@@ -391,12 +390,11 @@ class SimpleChoresStore:
                 raise ValueError(f"Invalid frequency: {frequency}. Must be one of: {FREQUENCIES}")
 
         # Validate room ID format if provided
-        if room_id is not None:
-            if not (room_id.startswith("area_") or room_id.startswith("custom_")):
-                raise ValueError(
-                    f"Invalid room ID format: {room_id}. "
-                    "Room IDs must start with 'area_' or 'custom_'"
-                )
+        if room_id is not None and not (room_id.startswith("area_") or room_id.startswith("custom_")):
+            raise ValueError(
+                f"Invalid room ID format: {room_id}. "
+                "Room IDs must start with 'area_' or 'custom_'"
+            )
 
         # Validate recurrence type if provided
         if recurrence_type is not None and recurrence_type not in RECURRENCE_TYPES:
