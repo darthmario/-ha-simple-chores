@@ -7,7 +7,6 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
@@ -214,7 +213,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # Set up platforms
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    except (OSError, IOError) as e:
+    except OSError as e:
         _LOGGER.error("File system error during setup: %s", e, exc_info=True)
         return False
     except HomeAssistantError as e:
