@@ -59,7 +59,7 @@ async def register_frontend_resources(hass: HomeAssistant, domain: str) -> None:
 
     except (OSError, IOError) as err:
         _LOGGER.error("File system error during frontend registration: %s", err, exc_info=True)
-    except Exception:  # noqa: BLE001
+    except Exception:
         _LOGGER.exception("Unexpected error registering frontend resources")
 
 
@@ -121,7 +121,7 @@ async def _register_hacs_compatible(
     except (OSError, IOError, PermissionError) as err:
         _LOGGER.error("Failed to copy card file: %s", err, exc_info=True)
         _logger_manual_instructions(domain)
-    except Exception:  # noqa: BLE001
+    except Exception:
         _LOGGER.exception("Unexpected error in HACS-compatible registration")
         _logger_manual_instructions(domain)
 

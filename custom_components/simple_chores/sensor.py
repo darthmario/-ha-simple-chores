@@ -12,8 +12,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     DOMAIN,
-    SENSOR_DUE_TODAY,
     SENSOR_DUE_NEXT_7_DAYS,
+    SENSOR_DUE_TODAY,
     SENSOR_OVERDUE,
     SENSOR_TOTAL,
 )

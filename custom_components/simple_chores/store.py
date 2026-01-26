@@ -85,12 +85,12 @@ class SimpleChoresStore:
     async def async_save_debounced(self, delay: float = 2.0) -> None:
         """Save data to storage with debouncing to reduce I/O operations."""
         self._dirty = True
-        
+
         # Cancel existing save task
         if self._save_task and not self._save_task.done():
             self._save_task.cancel()
-        
-        async def _delayed_save():
+
+        async def _delayed_save() -> None:
             try:
                 await asyncio.sleep(delay)
                 if self._dirty:
@@ -99,7 +99,7 @@ class SimpleChoresStore:
                     _LOGGER.debug("Debounced save completed")
             except asyncio.CancelledError:
                 _LOGGER.debug("Debounced save cancelled")
-            except (OSError, IOError, PermissionError) as e:
+            except OSError as e:
                 _LOGGER.error("File system error in debounced save: %s", e, exc_info=True)
             except Exception:
                 _LOGGER.exception("Unexpected error in debounced save")

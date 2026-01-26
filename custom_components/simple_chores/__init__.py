@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, time, timedelta
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from datetime import date, datetime, timedelta
+from typing import Any
 
 import voluptuous as vol
 
@@ -390,7 +391,7 @@ class ServiceHandlerFactory:
                 raise HomeAssistantError(f"Failed to {operation} chore: {e}") from e
 
         return handler
-    
+
     def create_data_handler(self, data_type: str) -> Callable[[ServiceCall], Awaitable[dict[str, Any]]]:
         """Create a data retrieval handler."""
         async def handler(call: ServiceCall) -> dict[str, Any]:
@@ -404,6 +405,8 @@ class ServiceHandlerFactory:
                     stats = self.coordinator.store.get_user_stats()
                     _LOGGER.debug("Retrieved stats for %d users", len(stats))
                     return {"stats": stats}
+                else:
+                    raise HomeAssistantError(f"Unknown data type: {data_type}")
             except KeyError as e:
                 _LOGGER.error("Missing required field in get_%s: %s", data_type, e)
                 raise HomeAssistantError(f"Missing required field: {e}") from e
