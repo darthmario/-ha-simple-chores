@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import date, datetime, time, timedelta
-from typing import Any, Callable, Awaitable
+from typing import Any, Awaitable, Callable
 
 import voluptuous as vol
 
@@ -65,9 +65,9 @@ from .const import (
     SERVICE_UPDATE_ROOM,
     SERVICE_UPDATE_USER,
 )
+from . import frontend_resources
 from .coordinator import SimpleChoresCoordinator
 from .store import SimpleChoresStore
-from . import frontend_resources
 
 _LOGGER = logging.getLogger(__name__)
 

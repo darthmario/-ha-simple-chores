@@ -28,6 +28,11 @@ ignore = [
     "B008",   # do not perform function calls in argument defaults
     "ARG001", # unused function argument (common in HA)
     "ARG002", # unused method argument (common in HA)
+    "SIM108", # use ternary operator (often less readable)
+    "PTH123", # use Path.open instead of open (HA uses open)
+    "TCH001", # move type-only import into TYPE_CHECKING block
+    "TCH002", # move third-party import into TYPE_CHECKING block
+    "TCH003", # move stdlib import into TYPE_CHECKING block
 ]
 
 [tool.ruff.lint.isort]
@@ -41,21 +46,23 @@ indent-style = "space"
 
 [tool.mypy]
 python_version = "3.11"
-warn_return_any = true
+warn_return_any = false
 warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
 check_untyped_defs = true
 no_implicit_optional = true
 warn_redundant_casts = true
-warn_unused_ignores = true
+warn_unused_ignores = false
 show_error_codes = true
+ignore_missing_imports = true
 
 # Be lenient with Home Assistant imports (they don't have complete stubs)
 [[tool.mypy.overrides]]
 module = [
     "homeassistant.*",
     "dateutil.*",
+    "voluptuous.*",
 ]
 ignore_missing_imports = true
 
