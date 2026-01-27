@@ -1,4 +1,5 @@
 """Frontend resource registration for Simple Chores custom card."""
+
 from __future__ import annotations
 
 import json
@@ -63,11 +64,7 @@ async def register_frontend_resources(hass: HomeAssistant, domain: str) -> None:
         _LOGGER.exception("Unexpected error registering frontend resources")
 
 
-async def _register_hacs_compatible(
-    hass: HomeAssistant,
-    domain: str,
-    source_file: str
-) -> None:
+async def _register_hacs_compatible(hass: HomeAssistant, domain: str, source_file: str) -> None:
     """Register card using HACS-compatible community folder structure.
 
     This is the recommended approach for custom integrations as it:
@@ -107,10 +104,7 @@ async def _register_hacs_compatible(
 
         _LOGGER.info("Successfully registered Simple Chores card v%s", version)
         _LOGGER.info("Card URL: %s", card_url)
-        _LOGGER.info(
-            "The card should be automatically available. "
-            "Cache will refresh automatically on version updates."
-        )
+        _LOGGER.info("The card should be automatically available. Cache will refresh automatically on version updates.")
 
     except ImportError:
         _LOGGER.error(

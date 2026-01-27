@@ -1,4 +1,5 @@
 """Calendar platform for Simple Chores integration."""
+
 from __future__ import annotations
 
 import logging
@@ -28,16 +29,12 @@ async def async_setup_entry(
     async_add_entities([SimpleChoresCalendar(coordinator, entry)])
 
 
-class SimpleChoresCalendar(
-    CoordinatorEntity[SimpleChoresCoordinator], CalendarEntity
-):
+class SimpleChoresCalendar(CoordinatorEntity[SimpleChoresCoordinator], CalendarEntity):
     """Calendar entity for Simple Chores."""
 
     _attr_has_entity_name = True
 
-    def __init__(
-        self, coordinator: SimpleChoresCoordinator, entry: ConfigEntry
-    ) -> None:
+    def __init__(self, coordinator: SimpleChoresCoordinator, entry: ConfigEntry) -> None:
         """Initialize the calendar."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_calendar"
@@ -104,9 +101,7 @@ class SimpleChoresCalendar(
 
         for chore in chores:
             # Generate events for this chore within the date range
-            chore_events = self._generate_chore_events(
-                chore, room_names, start, end
-            )
+            chore_events = self._generate_chore_events(chore, room_names, start, end)
             events.extend(chore_events)
 
         return sorted(events, key=lambda e: e.start)
@@ -158,7 +153,9 @@ class SimpleChoresCalendar(
                 current_due = calculate_next_due(current_due, frequency)
                 count += 1
             except (ValueError, OverflowError) as e:
-                _LOGGER.error("Invalid date calculation generating event for chore %s: %s", chore["id"], e, exc_info=True)
+                _LOGGER.error(
+                    "Invalid date calculation generating event for chore %s: %s", chore["id"], e, exc_info=True
+                )
                 break
             except Exception:
                 _LOGGER.exception("Unexpected error generating calendar event for chore %s", chore["id"])

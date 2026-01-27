@@ -1,4 +1,5 @@
 """Sensor platform for Simple Chores integration."""
+
 from __future__ import annotations
 
 import logging
@@ -67,9 +68,7 @@ class SimpleChoresBaseSensor(CoordinatorEntity[SimpleChoresCoordinator], SensorE
 class SimpleChoresDueTodaySensor(SimpleChoresBaseSensor):
     """Sensor showing number of chores due today."""
 
-    def __init__(
-        self, coordinator: SimpleChoresCoordinator, entry: ConfigEntry
-    ) -> None:
+    def __init__(self, coordinator: SimpleChoresCoordinator, entry: ConfigEntry) -> None:
         """Initialize the sensor."""
         super().__init__(
             coordinator,
@@ -121,9 +120,7 @@ class SimpleChoresDueTodaySensor(SimpleChoresBaseSensor):
 class SimpleChoresDueThisWeekSensor(SimpleChoresBaseSensor):
     """Sensor showing number of chores due in next 7 days."""
 
-    def __init__(
-        self, coordinator: SimpleChoresCoordinator, entry: ConfigEntry
-    ) -> None:
+    def __init__(self, coordinator: SimpleChoresCoordinator, entry: ConfigEntry) -> None:
         """Initialize the sensor."""
         super().__init__(
             coordinator,
@@ -176,9 +173,7 @@ class SimpleChoresDueThisWeekSensor(SimpleChoresBaseSensor):
 class SimpleChoresOverdueSensor(SimpleChoresBaseSensor):
     """Sensor showing number of overdue chores."""
 
-    def __init__(
-        self, coordinator: SimpleChoresCoordinator, entry: ConfigEntry
-    ) -> None:
+    def __init__(self, coordinator: SimpleChoresCoordinator, entry: ConfigEntry) -> None:
         """Initialize the sensor."""
         super().__init__(
             coordinator,
@@ -229,9 +224,7 @@ class SimpleChoresOverdueSensor(SimpleChoresBaseSensor):
 class SimpleChoresTotalSensor(SimpleChoresBaseSensor):
     """Sensor showing total number of chores."""
 
-    def __init__(
-        self, coordinator: SimpleChoresCoordinator, entry: ConfigEntry
-    ) -> None:
+    def __init__(self, coordinator: SimpleChoresCoordinator, entry: ConfigEntry) -> None:
         """Initialize the sensor."""
         super().__init__(
             coordinator,
@@ -297,4 +290,3 @@ class SimpleChoresTotalSensor(SimpleChoresBaseSensor):
             ],
             "users": self.coordinator.data.get("users", []),
         }
-

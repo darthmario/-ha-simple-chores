@@ -1,4 +1,5 @@
 """Data storage for the Household Tasks integration."""
+
 from __future__ import annotations
 
 import asyncio
@@ -164,10 +165,7 @@ class SimpleChoresStore:
             return False
 
         # Find and remove all chores associated with this room
-        chores_to_remove = [
-            chore_id for chore_id, chore in self._data["chores"].items()
-            if chore["room_id"] == room_id
-        ]
+        chores_to_remove = [chore_id for chore_id, chore in self._data["chores"].items() if chore["room_id"] == room_id]
 
         # Log and delete associated chores
         for chore_id in chores_to_remove:
@@ -289,8 +287,7 @@ class SimpleChoresStore:
         # Validate anchor fields if anchored recurrence
         if recurrence_type == "anchored":
             self._validate_anchor_fields(
-                frequency, anchor_days_of_week, anchor_type,
-                anchor_day_of_month, anchor_week, anchor_weekday
+                frequency, anchor_days_of_week, anchor_type, anchor_day_of_month, anchor_week, anchor_weekday
             )
 
         # Validate interval (default to 1)
@@ -398,10 +395,7 @@ class SimpleChoresStore:
 
         # Validate room ID format if provided
         if room_id is not None and not (room_id.startswith("area_") or room_id.startswith("custom_")):
-            raise ValueError(
-                f"Invalid room ID format: {room_id}. "
-                "Room IDs must start with 'area_' or 'custom_'"
-            )
+            raise ValueError(f"Invalid room ID format: {room_id}. Room IDs must start with 'area_' or 'custom_'")
 
         # Validate recurrence type if provided
         if recurrence_type is not None and recurrence_type not in RECURRENCE_TYPES:

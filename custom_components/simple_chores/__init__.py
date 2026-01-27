@@ -1,4 +1,5 @@
 """The Simple Chores integration."""
+
 from __future__ import annotations
 
 import logging
@@ -127,13 +128,9 @@ SERVICE_ADD_CHORE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_ASSIGNED_TO): cv.string,
         # Recurrence options
         vol.Optional(ATTR_RECURRENCE_TYPE): vol.In(RECURRENCE_TYPES),
-        vol.Optional(ATTR_ANCHOR_DAYS_OF_WEEK): vol.All(
-            cv.ensure_list, [vol.In(WEEKDAYS)]
-        ),
+        vol.Optional(ATTR_ANCHOR_DAYS_OF_WEEK): vol.All(cv.ensure_list, [vol.In(WEEKDAYS)]),
         vol.Optional(ATTR_ANCHOR_TYPE): vol.In(ANCHOR_TYPES),
-        vol.Optional(ATTR_ANCHOR_DAY_OF_MONTH): vol.All(
-            vol.Coerce(int), vol.Range(min=1, max=31)
-        ),
+        vol.Optional(ATTR_ANCHOR_DAY_OF_MONTH): vol.All(vol.Coerce(int), vol.Range(min=1, max=31)),
         vol.Optional(ATTR_ANCHOR_WEEK): vol.In(WEEK_ORDINALS),
         vol.Optional(ATTR_ANCHOR_WEEKDAY): vol.In(WEEKDAYS),
         vol.Optional(ATTR_INTERVAL): vol.All(vol.Coerce(int), vol.Range(min=1)),
@@ -156,13 +153,9 @@ SERVICE_UPDATE_CHORE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_ASSIGNED_TO): cv.string,
         # Recurrence options
         vol.Optional(ATTR_RECURRENCE_TYPE): vol.In(RECURRENCE_TYPES),
-        vol.Optional(ATTR_ANCHOR_DAYS_OF_WEEK): vol.All(
-            cv.ensure_list, [vol.In(WEEKDAYS)]
-        ),
+        vol.Optional(ATTR_ANCHOR_DAYS_OF_WEEK): vol.All(cv.ensure_list, [vol.In(WEEKDAYS)]),
         vol.Optional(ATTR_ANCHOR_TYPE): vol.In(ANCHOR_TYPES),
-        vol.Optional(ATTR_ANCHOR_DAY_OF_MONTH): vol.All(
-            vol.Coerce(int), vol.Range(min=1, max=31)
-        ),
+        vol.Optional(ATTR_ANCHOR_DAY_OF_MONTH): vol.All(vol.Coerce(int), vol.Range(min=1, max=31)),
         vol.Optional(ATTR_ANCHOR_WEEK): vol.In(WEEK_ORDINALS),
         vol.Optional(ATTR_ANCHOR_WEEKDAY): vol.In(WEEKDAYS),
         vol.Optional(ATTR_INTERVAL): vol.All(vol.Coerce(int), vol.Range(min=1)),
@@ -264,6 +257,7 @@ class ServiceHandlerFactory:
 
     def create_room_handler(self, operation: str) -> Callable[[ServiceCall], Awaitable[None]]:
         """Create a room operation handler."""
+
         async def handler(call: ServiceCall) -> None:
             try:
                 room_id = call.data.get(ATTR_ROOM_ID)
@@ -293,6 +287,7 @@ class ServiceHandlerFactory:
 
     def create_user_handler(self, operation: str) -> Callable[[ServiceCall], Awaitable[None]]:
         """Create a user operation handler."""
+
         async def handler(call: ServiceCall) -> None:
             try:
                 _LOGGER.info("=== User handler called for operation: %s ===", operation)
@@ -332,6 +327,7 @@ class ServiceHandlerFactory:
 
     def create_chore_handler(self, operation: str) -> Callable[[ServiceCall], Awaitable[None]]:
         """Create a chore operation handler."""
+
         async def handler(call: ServiceCall) -> None:
             try:
                 chore_id = call.data.get(ATTR_CHORE_ID)
@@ -352,9 +348,18 @@ class ServiceHandlerFactory:
 
                 if operation == "add":
                     await self.coordinator.async_add_chore(
-                        name, room_id, frequency, start_date, assigned_to,
-                        recurrence_type, anchor_days_of_week, anchor_type,
-                        anchor_day_of_month, anchor_week, anchor_weekday, interval
+                        name,
+                        room_id,
+                        frequency,
+                        start_date,
+                        assigned_to,
+                        recurrence_type,
+                        anchor_days_of_week,
+                        anchor_type,
+                        anchor_day_of_month,
+                        anchor_week,
+                        anchor_weekday,
+                        interval,
                     )
                     _LOGGER.info("Successfully added chore: %s", name)
                 elif operation == "remove":
@@ -362,9 +367,19 @@ class ServiceHandlerFactory:
                     _LOGGER.info("Successfully removed chore: %s", chore_id)
                 elif operation == "update":
                     await self.coordinator.async_update_chore(
-                        chore_id, name, room_id, frequency, next_due, assigned_to,
-                        recurrence_type, anchor_days_of_week, anchor_type,
-                        anchor_day_of_month, anchor_week, anchor_weekday, interval
+                        chore_id,
+                        name,
+                        room_id,
+                        frequency,
+                        next_due,
+                        assigned_to,
+                        recurrence_type,
+                        anchor_days_of_week,
+                        anchor_type,
+                        anchor_day_of_month,
+                        anchor_week,
+                        anchor_weekday,
+                        interval,
                     )
                     _LOGGER.info("Successfully updated chore: %s", chore_id)
                 elif operation == "complete":
@@ -393,6 +408,7 @@ class ServiceHandlerFactory:
 
     def create_data_handler(self, data_type: str) -> Callable[[ServiceCall], Awaitable[dict[str, Any]]]:
         """Create a data retrieval handler."""
+
         async def handler(call: ServiceCall) -> dict[str, Any]:
             try:
                 if data_type == "history":
@@ -417,6 +433,7 @@ class ServiceHandlerFactory:
 
     def create_notification_handler(self) -> Callable[[ServiceCall], Awaitable[None]]:
         """Create notification handler."""
+
         async def handler(call: ServiceCall) -> None:
             try:
                 await _async_send_due_notification(self.hass, self.coordinator)
@@ -428,9 +445,7 @@ class ServiceHandlerFactory:
         return handler
 
 
-async def _async_setup_services(
-    hass: HomeAssistant, coordinator: SimpleChoresCoordinator
-) -> None:
+async def _async_setup_services(hass: HomeAssistant, coordinator: SimpleChoresCoordinator) -> None:
     """Set up services for the integration using factory pattern."""
 
     factory = ServiceHandlerFactory(coordinator, hass)
@@ -441,12 +456,10 @@ async def _async_setup_services(
         (SERVICE_ADD_ROOM, factory.create_room_handler("add"), SERVICE_ADD_ROOM_SCHEMA),
         (SERVICE_REMOVE_ROOM, factory.create_room_handler("remove"), SERVICE_REMOVE_ROOM_SCHEMA),
         (SERVICE_UPDATE_ROOM, factory.create_room_handler("update"), SERVICE_UPDATE_ROOM_SCHEMA),
-
         # User services
         (SERVICE_ADD_USER, factory.create_user_handler("add"), SERVICE_ADD_USER_SCHEMA),
         (SERVICE_REMOVE_USER, factory.create_user_handler("remove"), SERVICE_REMOVE_USER_SCHEMA),
         (SERVICE_UPDATE_USER, factory.create_user_handler("update"), SERVICE_UPDATE_USER_SCHEMA),
-
         # Chore services
         (SERVICE_ADD_CHORE, factory.create_chore_handler("add"), SERVICE_ADD_CHORE_SCHEMA),
         (SERVICE_REMOVE_CHORE, factory.create_chore_handler("remove"), SERVICE_REMOVE_CHORE_SCHEMA),
@@ -454,20 +467,16 @@ async def _async_setup_services(
         (SERVICE_COMPLETE_CHORE, factory.create_chore_handler("complete"), SERVICE_COMPLETE_CHORE_SCHEMA),
         (SERVICE_SKIP_CHORE, factory.create_chore_handler("skip"), SERVICE_SKIP_CHORE_SCHEMA),
         (SERVICE_SNOOZE_CHORE, factory.create_chore_handler("snooze"), SERVICE_SNOOZE_CHORE_SCHEMA),
-
         # Data services
         (SERVICE_GET_HISTORY, factory.create_data_handler("history"), SERVICE_GET_HISTORY_SCHEMA),
         (SERVICE_GET_USER_STATS, factory.create_data_handler("stats"), None),
-
         # Notification service
         (SERVICE_SEND_NOTIFICATION, factory.create_notification_handler(), None),
     ]
 
     # Register all services using the factory pattern
     for service_name, handler, schema in service_configs:
-        hass.services.async_register(
-            DOMAIN, service_name, handler, schema=schema
-        )
+        hass.services.async_register(DOMAIN, service_name, handler, schema=schema)
 
 
 async def _async_setup_notification_scheduler(
@@ -483,9 +492,7 @@ async def _async_setup_notification_scheduler(
         hass.async_create_task(_async_check_and_notify(hass, entry, coordinator))
 
     # Get notification time from options
-    notification_time_str = entry.options.get(
-        CONF_NOTIFICATION_TIME, DEFAULT_NOTIFICATION_TIME
-    )
+    notification_time_str = entry.options.get(CONF_NOTIFICATION_TIME, DEFAULT_NOTIFICATION_TIME)
 
     # Parse time string (HH:MM format)
     try:
@@ -567,10 +574,7 @@ async def _async_send_due_notification(
         target_date_str = target_date.isoformat()
 
         # Find chores due on this target date
-        chores_due = [
-            chore for chore in all_chores
-            if chore.get("next_due") == target_date_str
-        ]
+        chores_due = [chore for chore in all_chores if chore.get("next_due") == target_date_str]
 
         if not chores_due:
             continue
@@ -615,9 +619,7 @@ async def _async_send_due_notification(
                     )
 
 
-async def _async_find_user_notify_services(
-    hass: HomeAssistant, user_id: str, user_name: str
-) -> list[str]:
+async def _async_find_user_notify_services(hass: HomeAssistant, user_id: str, user_name: str) -> list[str]:
     """Find mobile app notify services for a specific user."""
     user_services = []
 

@@ -1,4 +1,5 @@
 """Binary sensor platform for Simple Chores integration."""
+
 from __future__ import annotations
 
 import logging
@@ -30,17 +31,13 @@ async def async_setup_entry(
     async_add_entities([SimpleChoresHasOverdueSensor(coordinator, entry)])
 
 
-class SimpleChoresHasOverdueSensor(
-    CoordinatorEntity[SimpleChoresCoordinator], BinarySensorEntity
-):
+class SimpleChoresHasOverdueSensor(CoordinatorEntity[SimpleChoresCoordinator], BinarySensorEntity):
     """Binary sensor indicating if there are overdue chores."""
 
     _attr_has_entity_name = True
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
-    def __init__(
-        self, coordinator: SimpleChoresCoordinator, entry: ConfigEntry
-    ) -> None:
+    def __init__(self, coordinator: SimpleChoresCoordinator, entry: ConfigEntry) -> None:
         """Initialize the binary sensor."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_has_overdue"

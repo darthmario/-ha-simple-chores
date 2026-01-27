@@ -1,4 +1,5 @@
 """DataUpdateCoordinator for the Simple Chores integration."""
+
 from __future__ import annotations
 
 import calendar
@@ -412,6 +413,7 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Get HA Areas
         from homeassistant.helpers import area_registry as ar
+
         area_registry: AreaRegistry = ar.async_get(self.hass)
         for area in area_registry.async_list_areas():
             rooms.append(
@@ -433,9 +435,7 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Invalidate the room name cache when rooms are modified."""
         self._room_name_cache = None
 
-    def _get_room_name(
-        self, room_id: str, all_rooms: list[dict[str, Any]]
-    ) -> str:
+    def _get_room_name(self, room_id: str, all_rooms: list[dict[str, Any]]) -> str:
         """Get the display name for a room."""
         # Build cache once if empty or invalidated
         if not self._room_name_cache:
@@ -453,12 +453,14 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if user.system_generated:
                 continue
             if user.is_active:
-                users.append({
-                    "id": user.id,
-                    "name": user.name or user.id,
-                    "is_custom": False,
-                    "is_active": True,
-                })
+                users.append(
+                    {
+                        "id": user.id,
+                        "name": user.name or user.id,
+                        "is_custom": False,
+                        "is_active": True,
+                    }
+                )
 
         # Add custom users
         for user in self.store.users.values():
@@ -479,9 +481,7 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return user.name or user_id
         return user_id
 
-    async def async_complete_chore(
-        self, chore_id: str, user_id: str | None = None
-    ) -> dict[str, Any] | None:
+    async def async_complete_chore(self, chore_id: str, user_id: str | None = None) -> dict[str, Any] | None:
         """Complete a chore and reschedule it."""
         if chore_id not in self.store.chores:
             return None
@@ -539,9 +539,7 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self.async_request_refresh()
         return result
 
-    async def async_add_room(
-        self, name: str, icon: str | None = None
-    ) -> dict[str, Any]:
+    async def async_add_room(self, name: str, icon: str | None = None) -> dict[str, Any]:
         """Add a custom room."""
         room = self.store.add_room(name, icon)
         self._invalidate_room_cache()  # Cache must be refreshed
@@ -569,9 +567,7 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self.async_request_refresh()
         return result
 
-    async def async_add_user(
-        self, name: str, avatar: str | None = None
-    ) -> dict[str, Any]:
+    async def async_add_user(self, name: str, avatar: str | None = None) -> dict[str, Any]:
         """Add a custom user."""
         user = self.store.add_user(name, avatar)
         await self.store.async_save()
@@ -628,9 +624,18 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             assigned_to,
         )
         chore = self.store.add_chore(
-            name, room_id, frequency, start_date, assigned_to,
-            recurrence_type, anchor_days_of_week, anchor_type,
-            anchor_day_of_month, anchor_week, anchor_weekday, interval
+            name,
+            room_id,
+            frequency,
+            start_date,
+            assigned_to,
+            recurrence_type,
+            anchor_days_of_week,
+            anchor_type,
+            anchor_day_of_month,
+            anchor_week,
+            anchor_weekday,
+            interval,
         )
         _LOGGER.info("Coordinator: Created chore data: %s", chore)
         await self.store.async_save_debounced()  # Use debounced save for performance
@@ -665,9 +670,19 @@ class SimpleChoresCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
 
         chore = self.store.update_chore(
-            chore_id, name, room_id, frequency, next_due, assigned_to,
-            recurrence_type, anchor_days_of_week, anchor_type,
-            anchor_day_of_month, anchor_week, anchor_weekday, interval
+            chore_id,
+            name,
+            room_id,
+            frequency,
+            next_due,
+            assigned_to,
+            recurrence_type,
+            anchor_days_of_week,
+            anchor_type,
+            anchor_day_of_month,
+            anchor_week,
+            anchor_weekday,
+            interval,
         )
         if chore:
             await self.store.async_save_debounced()  # Use debounced save for performance

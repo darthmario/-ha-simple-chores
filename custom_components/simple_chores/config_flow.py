@@ -1,4 +1,5 @@
 """Config flow for Household Tasks integration."""
+
 from __future__ import annotations
 
 import logging
@@ -29,9 +30,7 @@ class HouseholdTasksConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle the initial step."""
         # Only allow a single instance
         await self.async_set_unique_id(DOMAIN)
@@ -45,9 +44,7 @@ class HouseholdTasksConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_NOTIFICATIONS_ENABLED: user_input.get(
                         CONF_NOTIFICATIONS_ENABLED, DEFAULT_NOTIFICATIONS_ENABLED
                     ),
-                    CONF_NOTIFICATION_TIME: user_input.get(
-                        CONF_NOTIFICATION_TIME, DEFAULT_NOTIFICATION_TIME
-                    ),
+                    CONF_NOTIFICATION_TIME: user_input.get(CONF_NOTIFICATION_TIME, DEFAULT_NOTIFICATION_TIME),
                     CONF_NOTIFY_TARGETS: user_input.get(CONF_NOTIFY_TARGETS, []),
                 },
             )
@@ -82,25 +79,19 @@ class HouseholdTasksOptionsFlow(OptionsFlow):
         """Initialize options flow."""
         self._config_entry = config_entry
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Manage the options."""
         if user_input is not None:
             # Convert days_before from string list to int list
             if CONF_NOTIFY_DAYS_BEFORE in user_input:
-                user_input[CONF_NOTIFY_DAYS_BEFORE] = [
-                    int(d) for d in user_input[CONF_NOTIFY_DAYS_BEFORE]
-                ]
+                user_input[CONF_NOTIFY_DAYS_BEFORE] = [int(d) for d in user_input[CONF_NOTIFY_DAYS_BEFORE]]
             return self.async_create_entry(title="", data=user_input)
 
         # Get list of notify services for target selection
         notify_services = []
         for service in self.hass.services.async_services().get("notify", {}):
             if service != "notify":
-                notify_services.append(
-                    selector.SelectOptionDict(value=service, label=service)
-                )
+                notify_services.append(selector.SelectOptionDict(value=service, label=service))
 
         # Options for days before notification
         days_before_options = [
@@ -112,9 +103,7 @@ class HouseholdTasksOptionsFlow(OptionsFlow):
         ]
 
         # Convert stored int list to string list for the selector
-        current_days = self._config_entry.options.get(
-            CONF_NOTIFY_DAYS_BEFORE, DEFAULT_NOTIFY_DAYS_BEFORE
-        )
+        current_days = self._config_entry.options.get(CONF_NOTIFY_DAYS_BEFORE, DEFAULT_NOTIFY_DAYS_BEFORE)
         current_days_str = [str(d) for d in current_days]
 
         return self.async_show_form(
@@ -129,9 +118,7 @@ class HouseholdTasksOptionsFlow(OptionsFlow):
                     ): selector.BooleanSelector(),
                     vol.Optional(
                         CONF_NOTIFICATION_TIME,
-                        default=self._config_entry.options.get(
-                            CONF_NOTIFICATION_TIME, DEFAULT_NOTIFICATION_TIME
-                        ),
+                        default=self._config_entry.options.get(CONF_NOTIFICATION_TIME, DEFAULT_NOTIFICATION_TIME),
                     ): selector.TimeSelector(),
                     vol.Optional(
                         CONF_NOTIFY_DAYS_BEFORE,
@@ -154,9 +141,7 @@ class HouseholdTasksOptionsFlow(OptionsFlow):
                         )
                     )
                     if notify_services
-                    else selector.TextSelector(
-                        selector.TextSelectorConfig(multiline=False)
-                    ),
+                    else selector.TextSelector(selector.TextSelectorConfig(multiline=False)),
                 }
             ),
         )

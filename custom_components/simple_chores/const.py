@@ -1,4 +1,5 @@
 """Constants for the Simple Chores integration."""
+
 from typing import Final
 
 DOMAIN: Final = "simple_chores"
